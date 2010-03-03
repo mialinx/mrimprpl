@@ -43,6 +43,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
+#include "proto.h"
 
 #include <glib.h>
 
