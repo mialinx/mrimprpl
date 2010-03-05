@@ -5,20 +5,20 @@
 #include <time.h>
 #include <glib.h>
 
-#include <purple/account.h>
-#include <purple/accountopt.h>
-#include <purple/blist.h>
-#include <purple/cmds.h>
-#include <purple/conversation.h>
-#include <purple/connection.h>
-#include <purple/debug.h>
-#include <purple/notify.h>
-#include <purple/privacy.h>
-#include <purple/prpl.h>
-#include <purple/roomlist.h>
-#include <purple/status.h>
-#include <purple/util.h>
-#include <purple/version.h>
+#include <account.h>
+#include <accountopt.h>
+#include <blist.h>
+#include <cmds.h>
+#include <conversation.h>
+#include <connection.h>
+#include <debug.h>
+#include <notify.h>
+#include <privacy.h>
+#include <prpl.h>
+#include <roomlist.h>
+#include <status.h>
+#include <util.h>
+#include <version.h>
 
 #include "proto.h"
 
