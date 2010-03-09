@@ -40,7 +40,7 @@ DIST_COMMON = README $(am__configure_deps) $(srcdir)/Makefile.am \
 	$(top_srcdir)/configure AUTHORS COPYING ChangeLog INSTALL NEWS \
 	config.guess config.sub depcomp install-sh ltmain.sh missing
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/configure.in
+am__aclocal_m4_deps = $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
@@ -72,9 +72,15 @@ am__base_list = \
   sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
 am__installdirs = "$(DESTDIR)$(libdir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
-libmrimprpl_la_LIBADD =
-am_libmrimprpl_la_OBJECTS = mrim.lo
+am__DEPENDENCIES_1 =
+libmrimprpl_la_DEPENDENCIES = $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1)
+am__objects_1 = libmrimprpl_la-mrimprpl.lo
+am_libmrimprpl_la_OBJECTS = $(am__objects_1)
 libmrimprpl_la_OBJECTS = $(am_libmrimprpl_la_OBJECTS)
+libmrimprpl_la_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(libmrimprpl_la_CFLAGS) \
+	$(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 DEFAULT_INCLUDES = -I.
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -126,6 +132,8 @@ ECHO_T =
 EGREP = /bin/grep -E
 EXEEXT = 
 FGREP = /bin/grep -F
+GLIB_CFLAGS = -pthread -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include  
+GLIB_LIBS = -Wl,--export-dynamic -pthread -lgobject-2.0 -lgmodule-2.0 -lgthread-2.0 -lrt -lglib-2.0  
 GREP = /bin/grep
 INSTALL = /bin/install -c
 INSTALL_DATA = ${INSTALL} -m 644
@@ -156,6 +164,9 @@ PACKAGE_TARNAME = mrimprpl
 PACKAGE_URL = 
 PACKAGE_VERSION = 0.1
 PATH_SEPARATOR = :
+PKG_CONFIG = /usr/bin/pkg-config
+PURPLE_CFLAGS = -I/usr/include/libpurple -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include  
+PURPLE_LIBS = -lpurple -lglib-2.0  
 RANLIB = ranlib
 SED = /bin/sed
 SET_MAKE = 
@@ -214,8 +225,14 @@ target_alias =
 top_build_prefix = 
 top_builddir = .
 top_srcdir = .
+MRIM_SOURCES = \
+    proto.h \
+    mrimprpl.c
+
 lib_LTLIBRARIES = libmrimprpl.la
-libmrimprpl_la_SOURCES = mrim.c
+libmrimprpl_la_SOURCES = $(MRIM_SOURCES)
+libmrimprpl_la_LIBADD = $(GLIB_LIBS) $(PURPLE_LIBS)
+libmrimprpl_la_CFLAGS = $(GLIB_CFLAGS) $(PURPLE_CFLAGS)
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 
@@ -304,7 +321,7 @@ clean-libLTLIBRARIES:
 	  rm -f "$${dir}/so_locations"; \
 	done
 libmrimprpl.la: $(libmrimprpl_la_OBJECTS) $(libmrimprpl_la_DEPENDENCIES) 
-	$(LINK) -rpath $(libdir) $(libmrimprpl_la_OBJECTS) $(libmrimprpl_la_LIBADD) $(LIBS)
+	$(libmrimprpl_la_LINK) -rpath $(libdir) $(libmrimprpl_la_OBJECTS) $(libmrimprpl_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -312,7 +329,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-include ./$(DEPDIR)/mrim.Plo
+include ./$(DEPDIR)/libmrimprpl_la-mrimprpl.Plo
 
 .c.o:
 	$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -334,6 +351,13 @@ include ./$(DEPDIR)/mrim.Plo
 #	source='$<' object='$@' libtool=yes \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
 #	$(LTCOMPILE) -c -o $@ $<
+
+libmrimprpl_la-mrimprpl.lo: mrimprpl.c
+	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libmrimprpl_la_CFLAGS) $(CFLAGS) -MT libmrimprpl_la-mrimprpl.lo -MD -MP -MF $(DEPDIR)/libmrimprpl_la-mrimprpl.Tpo -c -o libmrimprpl_la-mrimprpl.lo `test -f 'mrimprpl.c' || echo '$(srcdir)/'`mrimprpl.c
+	$(am__mv) $(DEPDIR)/libmrimprpl_la-mrimprpl.Tpo $(DEPDIR)/libmrimprpl_la-mrimprpl.Plo
+#	source='mrimprpl.c' object='libmrimprpl_la-mrimprpl.lo' libtool=yes \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libmrimprpl_la_CFLAGS) $(CFLAGS) -c -o libmrimprpl_la-mrimprpl.lo `test -f 'mrimprpl.c' || echo '$(srcdir)/'`mrimprpl.c
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -668,6 +692,10 @@ uninstall-am: uninstall-libLTLIBRARIES
 	mostlyclean-libtool pdf pdf-am ps ps-am tags uninstall \
 	uninstall-am uninstall-libLTLIBRARIES
 
+
+testinstall: all
+	test -d ~/.purple/plugins || mkdir ~/.purple/plugins; \
+	cp -v .libs/*.so ~/.purple/plugins
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.
