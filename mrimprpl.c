@@ -15,41 +15,226 @@
 #define MRIMPRPL_SUMMARY "Mail.Ru agent protocol support plugin"
 #define MRIMPRPL_DESCRIPTION MRIMPRPL_SUMMARY
 
+/*================ INTARFACE ================*/
+
+/*
+ * Returns the base icon name for the given buddy and account.
+ * If buddy is NULL and the account is non-NULL, it will return the
+ * name to use for the account's icon. If both are NULL, it will
+ * return the name to use for the protocol's icon.
+ *
+ * This must be implemented.
+ */
 static const char *
 mrim_list_icon(PurpleAccount *a, PurpleBuddy *b)
 {
     return "mrim";
 }
 
+/*
+ * Fills the four char**'s with string identifiers for "emblems"
+ * that the UI will interpret and display as relevant
+ */
 static const char *
 mrim_list_emblem(PurpleBuddy *b)
 {
     return "emblem";
 }
 
+/*
+ * Gets a short string representing this buddy's status.  This will
+ * be shown on the buddy list.
+ */
 static const char *
 mrim_status_text(PurpleBuddy *b)
 {
     return "status";
 }
 
-void 
+/*
+ * Allows the prpl to add text to a buddy's tooltip.
+ */
+static void 
 mrim_tooltip_text (PurpleBuddy *b, PurpleNotifyUserInfo *nui, gboolean full)
 {
 }
 
-GList *
+/*
+ * Returns a list of #PurpleStatusType which exist for this account;
+ * this must be implemented, and must add at least the offline and
+ * online states.
+ */
+static GList *
 mrim_status_types (PurpleAccount *a)
 {
     return NULL;
 }
 
-GList *
+/*
+ * Returns a list of #PurpleMenuAction structs, which represent extra
+ * actions to be shown in (for example) the right-click menu for @a
+ * node.
+ */
+static GList *
 mrim_blist_node_menu (PurpleBlistNode *node)
 {
     return NULL;
 }
 
+/* Perform login */
+static void 
+mrim_login(PurpleAccount *a)
+{
+    
+}
+
+/* Performs logout */
+static void 
+mrim_close(PurpleConnection *c)
+{
+}
+
+/*
+ * This PRPL function should return a positive value on success.
+ * If the message is too big to be sent, return -E2BIG.  If
+ * the account is not connected, return -ENOTCONN.  If the
+ * PRPL is unable to send the message for another reason, return
+ * some other negative value.  You can use one of the valid
+ * errno values, or just big something.  If the message should
+ * not be echoed to the conversation window, return 0.
+ */
+static int
+mrim_send_im(PurpleConnection *c, const char *who, const char *message, PurpleMessageFlags flags)
+{
+    return 0;
+}
+
+static void 
+mrim_set_info(PurpleConnection *c, const char *info)
+{
+}
+
+/*
+ * @return If this protocol requires the PURPLE_TYPING message to
+ *         be sent repeatedly to signify that the user is still
+ *         typing, then the PRPL should return the number of
+ *         seconds to wait before sending a subsequent notification.
+ *         Otherwise the PRPL should return 0.
+ */
+static unsigned int 
+mrim_send_typing(PurpleConnection *c, const char *name, PurpleTypingState state)
+{
+    return 0;
+}
+
+/**
+ * Should arrange for purple_notify_userinfo() to be called with
+ * who's user info.
+ */
+static void 
+mrim_get_info(PurpleConnection *c, const char *who)
+{
+}
+
+/* set account status */
+static void 
+mrim_set_status(PurpleAccount *a, PurpleStatus *status)
+{
+}
+
+/* set idle time */
+static void 
+mrim_set_idle(PurpleConnection *c, int idletime)
+{
+}
+
+/* chage account passwd */
+static void 
+mrim_change_passwd(PurpleConnection *c, const char *old_pass, const char *new_pass)
+{
+
+}
+
+/*
+ * Add a buddy to a group on the server.
+ *
+ * This PRPL function may be called in situations in which the buddy is
+ * already in the specified group. If the protocol supports
+ * authorization and the user is not already authorized to see the
+ * status of \a buddy, \a add_buddy should request authorization.
+ */
+static void 
+mrim_add_buddy(PurpleConnection *c, PurpleBuddy *buddy, PurpleGroup *group)
+{
+
+}
+
+/* Remove one buddy from a contact list */
+static void 
+mrim_remove_buddy(PurpleConnection *c, PurpleBuddy *buddy, PurpleGroup *group)
+{
+}
+
+/* Will be called regularly for this prpl's
+ * active connections.  You'd want to do this if you need to repeatedly
+ * send some kind of keepalive packet to the server to avoid being
+ * disconnected.  ("Regularly" is defined by
+ * <code>KEEPALIVE_INTERVAL</code> in <tt>libpurple/connection.c</tt>.)
+ */
+static void 
+mrim_keepalive(PurpleConnection *c)
+{
+}
+
+/* Chane a buddy group on a server */
+static void 
+mrim_group_buddy(PurpleConnection *c, const char *who, const char *old_group, const char *new_group)
+{
+}
+
+/* Rename group on a server side */
+static void 
+mrim_rename_group(PurpleConnection *c, const char *old_name, PurpleGroup *group, GList *moved_buddies)
+{
+}
+
+/*
+ * Convert the username @a who to its canonical form.  (For example,
+ * AIM treats "fOo BaR" and "foobar" as the same user; this function
+ * should return the same normalized string for both of those.)
+ */
+static const char 
+mrim_normalize(const PurpleAccount *a, const char *who)
+{
+}
+
+/* Removes group from a server */ 
+static void 
+mrim_remove_group(PurpleConnection *gc, PurpleGroup *group)
+{
+}
+
+/* Checks whether offline messages to @a buddy are supported.
+ * @return @c TRUE if @a buddy can be sent messages while they are
+ *         offline, or @c FALSE if not.
+ */
+static gboolean 
+mrim_offline_message(const PurpleBuddy *buddy)
+{
+    return 1;
+}
+
+/* Sends buzzzzz signal to a buddy */
+static gboolean 
+mrim_send_attention(PurpleConnection *gc, const char *username, guint type)
+{
+}
+
+static GList *
+mrim_get_attention_types(PurpleAccount *acct)
+{
+    return NULL;
+}
 /*================ PLUGIN ================*/
 static gboolean
 plugin_load(PurplePlugin *plugin) 
@@ -83,321 +268,72 @@ static PurplePluginProtocolInfo protocol_info = {
     mrim_status_types,      /* (MUST) returns a list of #PurpleStatusType which exist for this account */
     mrim_blist_node_menu,   /* returns a list of #PurpleMenuAction structs, which represent extra 
                                actions to be shown in (for example) the right-click menu for a node */
-
-//   /**
-//    * Returns a list of #proto_chat_entry structs, which represent
-//    * information required by the PRPL to join a chat. libpurple will
-//    * call join_chat along with the information filled by the user.
-//    *
-//    * @return A list of #proto_chat_entry structs
-//    */
-//   GList *(*chat_info)(PurpleConnection *);
-//
-//   /**
-//    * Returns a hashtable which maps #proto_chat_entry struct identifiers
-//    * to default options as strings based on chat_name. The resulting 
-//    * hashtable should be created with g_hash_table_new_full(g_str_hash,
-//    * g_str_equal, NULL, g_free);. Use #get_chat_name if you instead need
-//    * to extract a chat name from a hashtable.
-//    *
-//    * @param chat_name The chat name to be turned into components
-//    * @return Hashtable containing the information extracted from chat_name
-//    */
-//   GHashTable *(*chat_info_defaults)(PurpleConnection *, const char *chat_name);
-//
-//   /* All the server-related functions */
-//
-//   /** This must be implemented. */
-//   void (*login)(PurpleAccount *);
-//
-//   /** This must be implemented. */
-//   void (*close)(PurpleConnection *);
-//
-//   /**
-//    * This PRPL function should return a positive value on success.
-//    * If the message is too big to be sent, return -E2BIG.  If
-//    * the account is not connected, return -ENOTCONN.  If the
-//    * PRPL is unable to send the message for another reason, return
-//    * some other negative value.  You can use one of the valid
-//    * errno values, or just big something.  If the message should
-//    * not be echoed to the conversation window, return 0.
-//    */
-//   int  (*send_im)(PurpleConnection *, const char *who,
-//                   const char *message,
-//                   PurpleMessageFlags flags);
-//
-//   void (*set_info)(PurpleConnection *, const char *info);
-//
-//   /**
-//    * @return If this protocol requires the PURPLE_TYPING message to
-//    *         be sent repeatedly to signify that the user is still
-//    *         typing, then the PRPL should return the number of
-//    *         seconds to wait before sending a subsequent notification.
-//    *         Otherwise the PRPL should return 0.
-//    */
-//   unsigned int (*send_typing)(PurpleConnection *, const char *name, PurpleTypingState state);
-//
-//   /**
-//    * Should arrange for purple_notify_userinfo() to be called with
-//    * @a who's user info.
-//    */
-//   void (*get_info)(PurpleConnection *, const char *who);
-//   void (*set_status)(PurpleAccount *account, PurpleStatus *status);
-//
-//   void (*set_idle)(PurpleConnection *, int idletime);
-//   void (*change_passwd)(PurpleConnection *, const char *old_pass,
-//                         const char *new_pass);
-//   /**
-//    * Add a buddy to a group on the server.
-//    *
-//    * This PRPL function may be called in situations in which the buddy is
-//    * already in the specified group. If the protocol supports
-//    * authorization and the user is not already authorized to see the
-//    * status of \a buddy, \a add_buddy should request authorization.
-//    */
-//   void (*add_buddy)(PurpleConnection *, PurpleBuddy *buddy, PurpleGroup *group);
-//   void (*add_buddies)(PurpleConnection *, GList *buddies, GList *groups);
-//   void (*remove_buddy)(PurpleConnection *, PurpleBuddy *buddy, PurpleGroup *group);
-//   void (*remove_buddies)(PurpleConnection *, GList *buddies, GList *groups);
-//   void (*add_permit)(PurpleConnection *, const char *name);
-//   void (*add_deny)(PurpleConnection *, const char *name);
-//   void (*rem_permit)(PurpleConnection *, const char *name);
-//   void (*rem_deny)(PurpleConnection *, const char *name);
-//   void (*set_permit_deny)(PurpleConnection *);
-//
-//   /**
-//    * Called when the user requests joining a chat. Should arrange for
-//    * #serv_got_joined_chat to be called.
-//    *
-//    * @param components A hashtable containing information required to
-//    *                   join the chat as described by the entries returned
-//    *                   by #chat_info. It may also be called when accepting
-//    *                   an invitation, in which case this matches the
-//    *                   data parameter passed to #serv_got_chat_invite.
-//    */
-//   void (*join_chat)(PurpleConnection *, GHashTable *components);
-//
-//   /**
-//    * Called when the user refuses a chat invitation.
-//    *
-//    * @param components A hashtable containing information required to
-//    *                   join the chat as passed to #serv_got_chat_invite.
-//    */
-//   void (*reject_chat)(PurpleConnection *, GHashTable *components);
-//
-//   /**
-//    * Returns a chat name based on the information in components. Use
-//    * #chat_info_defaults if you instead need to generate a hashtable 
-//    * from a chat name.
-//    *
-//    * @param components A hashtable containing information about the chat.
-//    */
-//   char *(*get_chat_name)(GHashTable *components);
-//
-//   /**
-//    * Invite a user to join a chat.
-//    *
-//    * @param id      The id of the chat to invite the user to.
-//    * @param message A message displayed to the user when the invitation 
-//    *                is received.
-//    * @param who     The name of the user to send the invation to.
-//    */
-//   void (*chat_invite)(PurpleConnection *, int id,
-//                       const char *message, const char *who);
-//   /**
-//    * Called when the user requests leaving a chat.
-//    *
-//    * @param id The id of the chat to leave
-//    */
-//   void (*chat_leave)(PurpleConnection *, int id);
-//
-//   /**
-//    * Send a whisper to a user in a chat.
-//    *
-//    * @param id      The id of the chat.
-//    * @param who     The name of the user to send the whisper to.
-//    * @param message The message of the whisper.
-//    */
-//   void (*chat_whisper)(PurpleConnection *, int id,
-//                        const char *who, const char *message);
-//
-//   /**
-//    * Send a message to a chat.
-//    * This PRPL function should return a positive value on success.
-//    * If the message is too big to be sent, return -E2BIG.  If
-//    * the account is not connected, return -ENOTCONN.  If the
-//    * PRPL is unable to send the message for another reason, return
-//    * some other negative value.  You can use one of the valid
-//    * errno values, or just big something.  If the message should
-//    * not be echoed to the conversation window, return 0.
-//    *
-//    * @param id      The id of the chat to send the message to.
-//    * @param message The message to send to the chat.
-//    * @param flags   A bitwise OR of #PurpleMessageFlags representing
-//    *                message flags.
-//    * @return    A positive number or 0 in case of succes,
-//    *                a negative error number in case of failure.
-//    */
-//   int  (*chat_send)(PurpleConnection *, int id, const char *message, PurpleMessageFlags flags);
-//
-//   /** If implemented, this will be called regularly for this prpl's
-//    *  active connections.  You'd want to do this if you need to repeatedly
-//    *  send some kind of keepalive packet to the server to avoid being
-//    *  disconnected.  ("Regularly" is defined by
-//    *  <code>KEEPALIVE_INTERVAL</code> in <tt>libpurple/connection.c</tt>.)
-//    */
-//   void (*keepalive)(PurpleConnection *);
-//
-//   /** new user registration */
-//   void (*register_user)(PurpleAccount *);
-//
-//   /**
-//    * @deprecated Use #PurplePluginProtocolInfo.get_info instead.
-//    */
-//   void (*get_cb_info)(PurpleConnection *, int, const char *who);
-//   /**
-//    * @deprecated Use #PurplePluginProtocolInfo.get_cb_real_name and
-//    *             #PurplePluginProtocolInfo.status_text instead.
-//    */
-//   void (*get_cb_away)(PurpleConnection *, int, const char *who);
-//
-//   /** save/store buddy's alias on server list/roster */
-//   void (*alias_buddy)(PurpleConnection *, const char *who,
-//                       const char *alias);
-//
-//   /** change a buddy's group on a server list/roster */
-//   void (*group_buddy)(PurpleConnection *, const char *who,
-//                       const char *old_group, const char *new_group);
-//
-//   /** rename a group on a server list/roster */
-//   void (*rename_group)(PurpleConnection *, const char *old_name,
-//                        PurpleGroup *group, GList *moved_buddies);
-//
-//   void (*buddy_free)(PurpleBuddy *);
-//
-//   void (*convo_closed)(PurpleConnection *, const char *who);
-//
-//   /**
-//    *  Convert the username @a who to its canonical form.  (For example,
-//    *  AIM treats "fOo BaR" and "foobar" as the same user; this function
-//    *  should return the same normalized string for both of those.)
-//    */
-//   const char *(*normalize)(const PurpleAccount *, const char *who);
-//
-//   /**
-//    * Set the buddy icon for the given connection to @a img.  The prpl
-//    * does NOT own a reference to @a img; if it needs one, it must
-//    * #purple_imgstore_ref(@a img) itself.
-//    */
-//   void (*set_buddy_icon)(PurpleConnection *, PurpleStoredImage *img);
-//
-//   void (*remove_group)(PurpleConnection *gc, PurpleGroup *group);
-//
-//   /** Gets the real name of a participant in a chat.  For example, on
-//    *  XMPP this turns a chat room nick <tt>foo</tt> into
-//    *  <tt>room\@server/foo</tt>
-//    *  @param gc  the connection on which the room is.
-//    *  @param id  the ID of the chat room.
-//    *  @param who the nickname of the chat participant.
-//    *  @return    the real name of the participant.  This string must be
-//    *             freed by the caller.
-//    */
-//   char *(*get_cb_real_name)(PurpleConnection *gc, int id, const char *who);
-//
-//   void (*set_chat_topic)(PurpleConnection *gc, int id, const char *topic);
-//
-//   PurpleChat *(*find_blist_chat)(PurpleAccount *account, const char *name);
-//
-//   /* room listing prpl callbacks */
-//   PurpleRoomlist *(*roomlist_get_list)(PurpleConnection *gc);
-//   void (*roomlist_cancel)(PurpleRoomlist *list);
-//   void (*roomlist_expand_category)(PurpleRoomlist *list, PurpleRoomlistRoom *category);
-//
-//   /* file transfer callbacks */
-//   gboolean (*can_receive_file)(PurpleConnection *, const char *who);
-//   void (*send_file)(PurpleConnection *, const char *who, const char *filename);
-//   PurpleXfer *(*new_xfer)(PurpleConnection *, const char *who);
-//
-//   /** Checks whether offline messages to @a buddy are supported.
-//    *  @return @c TRUE if @a buddy can be sent messages while they are
-//    *          offline, or @c FALSE if not.
-//    */
-//   gboolean (*offline_message)(const PurpleBuddy *buddy);
-//
-//   PurpleWhiteboardPrplOps *whiteboard_prpl_ops;
-//
-//   /** For use in plugins that may understand the underlying protocol */
-//   int (*send_raw)(PurpleConnection *gc, const char *buf, int len);
-//
-//   /* room list serialize */
-//   char *(*roomlist_room_serialize)(PurpleRoomlistRoom *room);
-//
-//   /** Remove the user from the server.  The account can either be
-//    * connected or disconnected. After the removal is finished, the
-//    * connection will stay open and has to be closed!
-//    */
-//   /* This is here rather than next to register_user for API compatibility
-//    * reasons.
-//    */
-//   void (*unregister_user)(PurpleAccount *, PurpleAccountUnregistrationCb cb, void *user_data);
-//
-//   /* Attention API for sending & receiving zaps/nudges/buzzes etc. */
-//   gboolean (*send_attention)(PurpleConnection *gc, const char *username, guint type);
-//   GList *(*get_attention_types)(PurpleAccount *acct);
-//
-//   /**
-//    * The size of the PurplePluginProtocolInfo. This should always be sizeof(PurplePluginProtocolInfo).
-//    * This allows adding more functions to this struct without requiring a major version bump.
-//    */
-//   unsigned long struct_size;
-//
-//   /* NOTE:
-//    * If more functions are added, they should accessed using the following syntax:
-//    *
-//    *      if (PURPLE_PROTOCOL_PLUGIN_HAS_FUNC(prpl, new_function))
-//    *          prpl->new_function(...);
-//    *
-//    * instead of
-//    *
-//    *      if (prpl->new_function != NULL)
-//    *          prpl->new_function(...);
-//    *
-//    * The PURPLE_PROTOCOL_PLUGIN_HAS_FUNC macro can be used for the older member
-//    * functions (e.g. login, send_im etc.) too.
-//    */
-//
-//   /** This allows protocols to specify additional strings to be used for
-//    * various purposes.  The idea is to stuff a bunch of strings in this hash
-//    * table instead of expanding the struct for every addition.  This hash
-//    * table is allocated every call and MUST be unrefed by the caller.
-//    *
-//    * @param account The account to specify.  This can be NULL.
-//    * @return The protocol's string hash table. The hash table should be
-//    *         destroyed by the caller when it's no longer needed.
-//    */
-//   GHashTable *(*get_account_text_table)(PurpleAccount *account);
-//
-//   /**
-//    * Initiate a media session with the given contact.
-//    *
-//    * @param account The account to initiate the media session on.
-//    * @param who The remote user to initiate the session with.
-//    * @param type The type of media session to initiate.
-//    * @return TRUE if the call succeeded else FALSE. (Doesn't imply the media session or stream will be successfully created)
-//    */
-//   gboolean (*initiate_media)(PurpleAccount *account, const char *who,
-//                   PurpleMediaSessionType type);
-//
-//   /**
-//    * Checks to see if the given contact supports the given type of media session.
-//    *
-//    * @param account The account the contact is on.
-//    * @param who The remote user to check for media capability with.
-//    * @return The media caps the contact supports.
-//    */
-//   PurpleMediaCaps (*get_media_caps)(PurpleAccount *account,
-//                     const char *who);
-//
+    NULL,                   /* chat support */
+    NULL,                   /* chat support */
+    /* All the server-related functions */
+    mrim_login,             /* performs login */
+    mrim_close,             /* performs logout */
+    mrim_send_im,           /* sends istant message */
+    mrim_set_info,          /* set's self user info */
+    mrim_send_typing,       /* send 'typing..' notification */
+    mrim_get_info,          /* retriev user info */
+    mrim_set_status,        /* set status */
+    mrim_set_idle,          /* set idle time */
+    mrim_change_passwd,     /* change account passwd */
+    mrim_add_buddy,         /* add one buddy to a contact list */
+    NULL,                   /* void (*add_buddies)(PurpleConnection *, GList *buddies, GList *groups); */
+    mrim_remove_buddy,      /* remove one buddy from a contact list */
+    NULL,                   /* void (*remove_buddies)(PurpleConnection *, GList *buddies, GList *groups); */
+    NULL,                   /* void (*add_permit)(PurpleConnection *, const char *name); */
+    NULL,                   /* void (*add_deny)(PurpleConnection *, const char *name); */
+    NULL,                   /* void (*rem_permit)(PurpleConnection *, const char *name); */
+    NULL,                   /* void (*rem_deny)(PurpleConnection *, const char *name); */
+    NULL,                   /* void (*set_permit_deny)(PurpleConnection *); */
+    NULL,                   /* void (*join_chat)(PurpleConnection *, GHashTable *components); */
+    NULL,                   /* void (*reject_chat)(PurpleConnection *, GHashTable *components); */
+    NULL,                   /* char *(*get_chat_name)(GHashTable *components); */
+    NULL,                   /* void (*chat_invite)(PurpleConnection *, int id, const char *message, const char *who); */
+    NULL,                   /* void (*chat_leave)(PurpleConnection *, int id); */
+    NULL,                   /* void (*chat_whisper)(PurpleConnection *, int id, const char *who, const char *message); */
+    NULL,                   /* int  (*chat_send)(PurpleConnection *, int id, const char *message, PurpleMessageFlags flags); */
+    mrim_keepalive,         /* send keepalive packet to server */
+    NULL,                   /* void (*register_user)(PurpleAccount *); */
+    NULL,                   /* deprecated: void (*get_cb_info)(PurpleConnection *, int, const char *who); */
+    NULL,                   /* deprecated: void (*get_cb_away)(PurpleConnection *, int, const char *who); */
+    NULL,                   /* void (*alias_buddy)(PurpleConnection *, const char *who, const char *alias); */
+    mrim_group_buddy,       /* change a buddy's group on a server list/roster */
+    mrim_rename_group,      /* rename a group on a server list/roster */
+    NULL,                   /* void (*buddy_free)(PurpleBuddy *); */
+    NULL,                   /* void (*convo_closed)(PurpleConnection *, const char *who); */
+    mrim_normalize,         /* converts username to its canonical form */
+    NULL,                   /* void (*set_buddy_icon)(PurpleConnection *, PurpleStoredImage *img); */
+    mrim_remove_group,      /* removes group from a server */
+    NULL,                   /* char *(*get_cb_real_name)(PurpleConnection *gc, int id, const char *who); */
+    NULL,                   /* void (*set_chat_topic)(PurpleConnection *gc, int id, const char *topic); */
+    NULL,                   /* PurpleChat *(*find_blist_chat)(PurpleAccount *account, const char *name); */
+    
+    /* room listing prpl callbacks */
+    NULL,                   /* PurpleRoomlist *(*roomlist_get_list)(PurpleConnection *gc); */
+    NULL,                   /* void (*roomlist_cancel)(PurpleRoomlist *list); */
+    NULL,                   /* void (*roomlist_expand_category)(PurpleRoomlist *list, PurpleRoomlistRoom *category); */
+  
+    /* file transfer callbacks */
+    NULL,                   /* gboolean (*can_receive_file)(PurpleConnection *, const char *who); */
+    NULL,                   /* void (*send_file)(PurpleConnection *, const char *who, const char *filename); */
+    NULL,                   /* PurpleXfer *(*new_xfer)(PurpleConnection *, const char *who); */
+  
+    /* misc */
+    mrim_offline_message,   /* returns true if ofline messages are supported */
+    NULL,                   /* PurpleWhiteboardPrplOps *whiteboard_prpl_ops; */
+    NULL,                   /* int (*send_raw)(PurpleConnection *gc, const char *buf, int len); */
+    NULL,                   /* char *(*roomlist_room_serialize)(PurpleRoomlistRoom *room); */
+    NULL,                   /* void (*unregister_user)(PurpleAccount *, PurpleAccountUnregistrationCb cb, void *user_data); */
+    mrim_send_attention,    /* send buzzzz signal to a buddy */
+    mrim_get_attention_types, /* returns attention types */
+    sizeof(protocol_info),
+    NULL,
+    NULL,
+    NULL 
 };
 
 static PurplePluginInfo info = {
