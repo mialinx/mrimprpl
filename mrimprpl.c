@@ -5,6 +5,8 @@
 #include "notify.h"
 #include "plugin.h"
 #include "prpl.h"
+#include "account.h"
+#include "accountopt.h"
 #include "version.h"
 
 #define MRIMPRPL_ID "prpl-mialinx-mrim"
@@ -45,7 +47,7 @@ mrim_list_emblem(PurpleBuddy *b)
  * Gets a short string representing this buddy's status.  This will
  * be shown on the buddy list.
  */
-static const char *
+static char *
 mrim_status_text(PurpleBuddy *b)
 {
     return "status";
@@ -203,7 +205,7 @@ mrim_rename_group(PurpleConnection *c, const char *old_name, PurpleGroup *group,
  * AIM treats "fOo BaR" and "foobar" as the same user; this function
  * should return the same normalized string for both of those.)
  */
-static const char 
+static const char *
 mrim_normalize(const PurpleAccount *a, const char *who)
 {
 }
@@ -239,7 +241,7 @@ mrim_get_attention_types(PurpleAccount *acct)
 static gboolean
 plugin_load(PurplePlugin *plugin) 
 {
-    purple_notify_message(plugin, PURPLE_NOTIFY_MSG_INFO, "Hello World!",
+    purple_notify_message(plugin, PURPLE_NOTIFY_MSG_INFO, "Hello Mrim!",
                         "This is the Hello World! plugin :)", NULL, NULL, NULL);
 
     return TRUE;
@@ -340,7 +342,7 @@ static PurplePluginInfo info = {
     PURPLE_PLUGIN_MAGIC,        /* libpurple magic */
     PURPLE_MAJOR_VERSION,       /* major version of libpurple */
     PURPLE_MINOR_VERSION,       /* minor version of libpurple */
-    PURPLE_PLUGIN_STANDARD,     /* type of plugin */
+    PURPLE_PLUGIN_PROTOCOL,     /* type of plugin */
     NULL,                       /* UI type of plugin. null for core plugins */
     0,                          /* plugin flags. no flags needed */
     NULL,                       /* GList of dependensies. flled in plugin_init */
@@ -372,6 +374,9 @@ static PurplePluginInfo info = {
 static void                        
 init_plugin(PurplePlugin *plugin)
 {                                  
+    PurpleAccountOption *option;
+    option = purple_account_option_bool_new("Notify about Emails", "notify_emails", FALSE);
+    protocol_info.protocol_options = g_list_append(protocol_info.protocol_options, option);
 }
 
 PURPLE_INIT_PLUGIN(hello_world, init_plugin, info)
