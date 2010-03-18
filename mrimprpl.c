@@ -106,7 +106,7 @@ static void
 mrim_login(PurpleAccount *a)
 {
    guint bport = (guint) purple_account_get_int(a, "balancer_port", MRIMPRPL_BALANCER_DEFAULT_PORT);
-   char * bhost = purple_account_get_string(a, "balancer_host", MRIMPRPL_BALANCER_DEFAULT_HOST);
+   const char *bhost = purple_account_get_string(a, "balancer_host", MRIMPRPL_BALANCER_DEFAULT_HOST);
 }
 
 /* Performs logout */
