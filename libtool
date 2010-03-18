@@ -2,7 +2,7 @@
 
 # libtool - Provide generalized library-building support services.
 # Generated automatically by config.status (mrimprpl) 0.1
-# Libtool was configured on host myhost:
+# Libtool was configured on host nuftop:
 # NOTE: Changes made to this file will be lost: look at ltmain.sh.
 #
 #   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2003, 2004, 2005,
@@ -237,7 +237,7 @@ hardcode_into_libs=yes
 sys_lib_search_path_spec="/usr/lib/gcc/i686-pc-linux-gnu/4.4.3 /usr/lib /lib"
 
 # Run-time system search path for libraries.
-sys_lib_dlsearch_path_spec="/lib /usr/lib /usr/lib/libfakeroot /opt/kde/lib /opt/qt/lib /usr/lib/xulrunner-1.9.2 "
+sys_lib_dlsearch_path_spec="/lib /usr/lib /usr/lib/libfakeroot /usr/lib/xulrunner-1.9.2 "
 
 # Whether dlopen is supported.
 dlopen_support=unknown

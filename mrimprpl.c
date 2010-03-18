@@ -1,13 +1,5 @@
-#define PURPLE_PLUGINS
-
 #include <glib.h>
-
-#include "notify.h"
-#include "plugin.h"
-#include "prpl.h"
-#include "account.h"
-#include "accountopt.h"
-#include "version.h"
+#include <purple.h>
 
 #define MRIMPRPL_ID "prpl-mialinx-mrim"
 #define MRIMPRPL_NAME "Mail.Ru protocol"
@@ -16,6 +8,9 @@
 #define MRIMPRPL_WEBSITE ""
 #define MRIMPRPL_SUMMARY "Mail.Ru agent protocol support plugin"
 #define MRIMPRPL_DESCRIPTION MRIMPRPL_SUMMARY
+
+#define MRIMPRPL_BALANCER_DEFAULT_PORT 2042
+#define MRIMPRPL_BALANCER_DEFAULT_HOST "mrim.mail.ru"
 
 /*================ INTARFACE ================*/
 
@@ -69,7 +64,30 @@ mrim_tooltip_text (PurpleBuddy *b, PurpleNotifyUserInfo *nui, gboolean full)
 static GList *
 mrim_status_types (PurpleAccount *a)
 {
-    return NULL;
+    PurpleStatusType *type = NULL;
+    GList *list = NULL;
+
+    type = purple_status_type_new_full(PURPLE_STATUS_AVAILABLE, NULL, NULL, 
+            TRUE, TRUE, FALSE);
+    list = g_list_append(list, type);
+
+    type = purple_status_type_new_full(PURPLE_STATUS_AWAY, NULL, NULL, 
+            TRUE, TRUE, FALSE);
+    list = g_list_append(list, type);
+
+    type = purple_status_type_new_full(PURPLE_STATUS_UNAVAILABLE, NULL, NULL, 
+            TRUE, TRUE, FALSE);
+    list = g_list_append(list, type);
+
+    type = purple_status_type_new_full(PURPLE_STATUS_INVISIBLE, NULL, NULL, 
+            TRUE, TRUE, FALSE);
+    list = g_list_append(list, type);
+
+    type = purple_status_type_new_full(PURPLE_STATUS_OFFLINE, NULL, NULL, 
+            TRUE, TRUE, FALSE);
+    list = g_list_append(list, type);
+
+    return list;
 }
 
 /*
@@ -87,7 +105,8 @@ mrim_blist_node_menu (PurpleBlistNode *node)
 static void 
 mrim_login(PurpleAccount *a)
 {
-    
+   guint bport = (guint) purple_account_get_int(a, "balancer_port", MRIMPRPL_BALANCER_DEFAULT_PORT);
+   char * bhost = purple_account_get_string(a, "balancer_host", MRIMPRPL_BALANCER_DEFAULT_HOST);
 }
 
 /* Performs logout */
@@ -237,26 +256,8 @@ mrim_get_attention_types(PurpleAccount *acct)
 {
     return NULL;
 }
+
 /*================ PLUGIN ================*/
-static gboolean
-plugin_load(PurplePlugin *plugin) 
-{
-    purple_notify_message(plugin, PURPLE_NOTIFY_MSG_INFO, "Hello Mrim!",
-                        "This is the Hello World! plugin :)", NULL, NULL, NULL);
-
-    return TRUE;
-}
-
-static gboolean
-plugin_unload(PurplePlugin *plugin)
-{
-    return TRUE;
-}
-
-void
-plugin_destroy(PurplePlugin *plugin)
-{
-}
 
 static PurplePluginProtocolInfo protocol_info = {
     0,                      /* Protocol options: no options for now */
@@ -357,9 +358,9 @@ static PurplePluginInfo info = {
     MRIMPRPL_AUTHOR,            /* and author */
     MRIMPRPL_WEBSITE,           /* and yes, web site */
 
-    plugin_load,                /* callback to load the plugin */
-    plugin_unload,              /* callback for cleanup when unloaded */
-    plugin_destroy,             /* callback for cleanup in case of emergency */
+    NULL,                       /* callback to load the plugin */
+    NULL,                       /* callback for cleanup when unloaded */
+    NULL,                       /* callback for cleanup in case of emergency */
 
     NULL,                       /* pointer to UI specific part of info */
     &protocol_info,             /* pointer to protocol specific part of info */
@@ -375,8 +376,18 @@ static void
 init_plugin(PurplePlugin *plugin)
 {                                  
     PurpleAccountOption *option;
+    PurpleAccountUserSplit *split;
+
+    option = purple_account_option_string_new("Balancer host", "balancer_host", MRIMPRPL_BALANCER_DEFAULT_HOST);
+    protocol_info.protocol_options = g_list_append(protocol_info.protocol_options, option);
+
+    option = purple_account_option_int_new("Balancer port", "balancer_port", MRIMPRPL_BALANCER_DEFAULT_PORT);
+    protocol_info.protocol_options = g_list_append(protocol_info.protocol_options, option);
+
+    /*
     option = purple_account_option_bool_new("Notify about Emails", "notify_emails", FALSE);
     protocol_info.protocol_options = g_list_append(protocol_info.protocol_options, option);
+    */
 }
 
 PURPLE_INIT_PLUGIN(hello_world, init_plugin, info)

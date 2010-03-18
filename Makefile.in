@@ -693,7 +693,7 @@ uninstall-am: uninstall-libLTLIBRARIES
 	uninstall-am uninstall-libLTLIBRARIES
 
 
-testinstall: all
+ti: all
 	test -d ~/.purple/plugins || mkdir ~/.purple/plugins; \
 	cp -v .libs/*.so ~/.purple/plugins
 
