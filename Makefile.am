@@ -1,6 +1,8 @@
 MRIM_SOURCES = \
     proto.h \
-    mrimprpl.c
+    mrim.h \
+    mrim.c \
+    libmrimprpl.c
 
 lib_LTLIBRARIES = libmrimprpl.la
 libmrimprpl_la_SOURCES = $(MRIM_SOURCES)

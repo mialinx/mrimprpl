@@ -1,6 +1,4 @@
-#                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
-
 AC_PREREQ([2.65])
 AC_INIT([mrimprpl], [0.1], [mialinx@gmail.com])
 AM_INIT_AUTOMAKE([mrimprpl], [0.1])
@@ -23,7 +21,6 @@ PKG_CHECK_MODULES(GLIB, [glib-2.0 >= 2.4.0 gobject-2.0 gmodule-2.0 gthread-2.0],
     If you have these installed already you may need to install pkg-config so
     I can find them.
 ])])
-
 PKG_CHECK_MODULES(PURPLE, [purple >= 2.6.0], , [
     AC_MSG_RESULT(no)
     AC_MSG_ERROR([
@@ -39,6 +36,11 @@ AC_CHECK_HEADERS([string.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 
-# Checks for library functions.
+# Checks for options
+AC_ARG_ENABLE([mrim-debug], [  
+    --enable-mrim-debug         Enable mrim protocol debug ],[ 
+    AC_DEFINE(ENABLE_MRIM_DEBUG, [1], [if Mrim debug enabled]) ],[
+])
 
+# Checks for library functions.
 AC_OUTPUT([Makefile])

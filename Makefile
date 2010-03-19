@@ -75,7 +75,7 @@ LTLIBRARIES = $(lib_LTLIBRARIES)
 am__DEPENDENCIES_1 =
 libmrimprpl_la_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1)
-am__objects_1 = libmrimprpl_la-mrimprpl.lo
+am__objects_1 = libmrimprpl_la-mrim.lo libmrimprpl_la-libmrimprpl.lo
 am_libmrimprpl_la_OBJECTS = $(am__objects_1)
 libmrimprpl_la_OBJECTS = $(am_libmrimprpl_la_OBJECTS)
 libmrimprpl_la_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) \
@@ -227,7 +227,9 @@ top_builddir = .
 top_srcdir = .
 MRIM_SOURCES = \
     proto.h \
-    mrimprpl.c
+    mrim.h \
+    mrim.c \
+    libmrimprpl.c
 
 lib_LTLIBRARIES = libmrimprpl.la
 libmrimprpl_la_SOURCES = $(MRIM_SOURCES)
@@ -329,7 +331,8 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-include ./$(DEPDIR)/libmrimprpl_la-mrimprpl.Plo
+include ./$(DEPDIR)/libmrimprpl_la-libmrimprpl.Plo
+include ./$(DEPDIR)/libmrimprpl_la-mrim.Plo
 
 .c.o:
 	$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -352,12 +355,19 @@ include ./$(DEPDIR)/libmrimprpl_la-mrimprpl.Plo
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
 #	$(LTCOMPILE) -c -o $@ $<
 
-libmrimprpl_la-mrimprpl.lo: mrimprpl.c
-	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libmrimprpl_la_CFLAGS) $(CFLAGS) -MT libmrimprpl_la-mrimprpl.lo -MD -MP -MF $(DEPDIR)/libmrimprpl_la-mrimprpl.Tpo -c -o libmrimprpl_la-mrimprpl.lo `test -f 'mrimprpl.c' || echo '$(srcdir)/'`mrimprpl.c
-	$(am__mv) $(DEPDIR)/libmrimprpl_la-mrimprpl.Tpo $(DEPDIR)/libmrimprpl_la-mrimprpl.Plo
-#	source='mrimprpl.c' object='libmrimprpl_la-mrimprpl.lo' libtool=yes \
+libmrimprpl_la-mrim.lo: mrim.c
+	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libmrimprpl_la_CFLAGS) $(CFLAGS) -MT libmrimprpl_la-mrim.lo -MD -MP -MF $(DEPDIR)/libmrimprpl_la-mrim.Tpo -c -o libmrimprpl_la-mrim.lo `test -f 'mrim.c' || echo '$(srcdir)/'`mrim.c
+	$(am__mv) $(DEPDIR)/libmrimprpl_la-mrim.Tpo $(DEPDIR)/libmrimprpl_la-mrim.Plo
+#	source='mrim.c' object='libmrimprpl_la-mrim.lo' libtool=yes \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
-#	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libmrimprpl_la_CFLAGS) $(CFLAGS) -c -o libmrimprpl_la-mrimprpl.lo `test -f 'mrimprpl.c' || echo '$(srcdir)/'`mrimprpl.c
+#	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libmrimprpl_la_CFLAGS) $(CFLAGS) -c -o libmrimprpl_la-mrim.lo `test -f 'mrim.c' || echo '$(srcdir)/'`mrim.c
+
+libmrimprpl_la-libmrimprpl.lo: libmrimprpl.c
+	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libmrimprpl_la_CFLAGS) $(CFLAGS) -MT libmrimprpl_la-libmrimprpl.lo -MD -MP -MF $(DEPDIR)/libmrimprpl_la-libmrimprpl.Tpo -c -o libmrimprpl_la-libmrimprpl.lo `test -f 'libmrimprpl.c' || echo '$(srcdir)/'`libmrimprpl.c
+	$(am__mv) $(DEPDIR)/libmrimprpl_la-libmrimprpl.Tpo $(DEPDIR)/libmrimprpl_la-libmrimprpl.Plo
+#	source='libmrimprpl.c' object='libmrimprpl_la-libmrimprpl.lo' libtool=yes \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libmrimprpl_la_CFLAGS) $(CFLAGS) -c -o libmrimprpl_la-libmrimprpl.lo `test -f 'libmrimprpl.c' || echo '$(srcdir)/'`libmrimprpl.c
 
 mostlyclean-libtool:
 	-rm -f *.lo
