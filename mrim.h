@@ -13,8 +13,15 @@
 struct _MrimData 
 {
     PurpleAccount *account;
+    
+    char *balancer_host;
+    guint balancer_port;
+    gint balancer_fd;
+    guint balancer_input_handler;
+
     char *server_host;
     guint server_port;
+    gint server_fd;
 };
 
 typedef struct _MrimData MrimData;
