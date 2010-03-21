@@ -94,13 +94,47 @@ mrim_blist_node_menu (PurpleBlistNode *node)
 
 /* Perform login */
 static void
+mrim_login_server_connected(gpointer data, gint source, const gchar *error_message)
+{
+    MrimData *md = (MrimData*) data;
+
+}
+
+static void
 mrim_login_balancer_answered(gpointer data, gint source, PurpleInputCondition cond)
 {
     MrimData *md = (MrimData*) data;
-    gchar buff[4 * 4 + 7]; //ipadd + port
-    gint bytes = 0;
+    guint buff_size = 32;
+    gchar *buff; /*ipadd + port*/
+    gchar **buff_split;
+    PurpleProxyConnectData *connect;
 
-    // TODO from here
+    buff = g_malloc0(buff_size);
+    read(source, buff, buff_size);
+    g_strchomp(buff);
+    buff_split = g_strsplit(buff, ":", 2);
+    md->server.host = g_strdup(buff_split[0]);
+    md->server.port = (guint) atoi(buff_split[1]);
+    g_strfreev(buff_split);
+    g_free(buff);
+    purple_input_remove(md->balancer.input_handler);
+    md->balancer.input_handler = 0;
+
+    #ifdef ENABLE_MRIM_DEBUG
+    purple_debug_info("mrim", "connecting to server: %s:%u", md->server.host, 
+        md->server.port);
+    #endif
+
+    connect = purple_proxy_connect(NULL, md->account, md->server.host,
+                md->server.port, mrim_login_server_connected, md);
+
+    if (!connect) {
+        purple_connection_error_reason(md->account->gc,
+            PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
+            "Failed to connect to server"
+        );
+        return;
+    }
 }
 
 static void 
@@ -118,12 +152,12 @@ mrim_login_balancer_connected(gpointer data, gint source, const gchar *error_mes
     #ifdef ENABLE_MRIM_DEBUG
     purple_debug_info("mrim", "balancer connected to %d\n", source);
     #endif
-    
-    md->balancer_fd = source;
-    md->balancer_input_handler = purple_input_add(md->balancer_fd, PURPLE_INPUT_READ,
+   
+    md->balancer.fd = source;
+    md->balancer.input_handler = purple_input_add(md->balancer.fd, PURPLE_INPUT_READ,
             mrim_login_balancer_answered, md);
 
-    if (!md->balancer_input_handler) {
+    if (!md->balancer.input_handler) {
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
             "Unable to connect to balancer"
@@ -140,19 +174,19 @@ mrim_login(PurpleAccount *account)
 
     md = g_new0(MrimData, 1);
     md->account = account;
-    md->balancer_port = (guint) purple_account_get_int(account, 
+    md->balancer.port = (guint) purple_account_get_int(account, 
                 "balancer_port", MRIMPRPL_BALANCER_DEFAULT_PORT);
-    md->balancer_host = g_strdup(purple_account_get_string(account, 
+    md->balancer.host = g_strdup(purple_account_get_string(account, 
                 "balancer_host", MRIMPRPL_BALANCER_DEFAULT_HOST));
     
     #ifdef ENABLE_MRIM_DEBUG
     purple_debug_info("mrim", "resolving balancer host %s:%u", 
-                md->balancer_host, md->balancer_port);
+                md->balancer.host, md->balancer.port);
     #endif
 
-    connect = purple_proxy_connect(NULL, md->account, md->balancer_host, md->balancer_port,
-                mrim_login_balancer_connected, md);
-    if (!connect) {
+    md->balancer.connect_data = purple_proxy_connect(NULL, md->account, 
+        md->balancer.host, md->balancer.port, mrim_login_balancer_connected, md);
+    if (!md->balancer.connect_data) {
         purple_connection_error_reason(account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
             "Unable to connect to balancer host"
