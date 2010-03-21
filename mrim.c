@@ -4,6 +4,9 @@
 #include <netinet/in.h>
 #include <string.h>
 #include "mrim.h"
+#include "pkt.h"
+
+#define MRIM_CIRC_BUFFER_GROW (16 * 1024)
 
 /*
  * Returns the base icon name for the given buddy and account.
@@ -92,12 +95,93 @@ mrim_blist_node_menu (PurpleBlistNode *node)
     return NULL;
 }
 
+/* Basic read/write ops */
+
+static void
+mrim_server_canwrite_cb(gpointer data, gint source, PurpleInputCondition cond)
+{
+    MrimData *md = (MrimData*) data;
+    guint max_read = 0;
+    gint written = 0;
+
+    fprintf(stderr, "server_write\n");
+
+    while (max_read = purple_circ_buffer_get_max_read(md->server.tx_buf)) {
+        written = write(source, md->server.tx_buf->outptr, max_read);
+        if (written > 0) {
+            purple_circ_buffer_mark_read(md->server.tx_buf, written);
+        }
+        else {
+            // TODO : think about error handling
+        }
+    }
+
+    purple_input_remove(md->server.write_ih);
+}
+
+static gboolean
+mrim_server_send_pkt(MrimData *md, MrimPacketHeader *pkt)
+{
+    if (!pkt) {
+        return FALSE;
+    }
+
+    purple_buffer_append(md->server.tx_buf, pkt, MRIM_PKT_TOTAL_LENGTH(pkt));
+    if (!md->server.write_ih) {
+        md->server.write_ih = purple_input_add(md->server.fd, PURPLE_INPUT_WRITE,
+            mrim_server_canwrite_cb, md);
+        if (!md->server.write_ih) {
+            purple_connection_error_reason(md->account->gc,
+                PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
+                "Failed to connect to server" // TODO: more reasonable name ?
+            );
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+static void
+mrim_server_canread_cb(gpointer data, gint source, PurpleInputCondition cond)
+{
+    fprintf(stderr, "server_read\n");
+}
+
+
 /* Perform login */
 static void
 mrim_login_server_connected(gpointer data, gint source, const gchar *error_message)
 {
     MrimData *md = (MrimData*) data;
+    
+    if (source < 0) {
+        gchar *tmp = g_strdup_printf("Failed to connect to server: %s\n", error_message);
+        purple_connection_error_reason(md->account->gc,
+            PURPLE_CONNECTION_ERROR_NETWORK_ERROR, tmp
+        );
+        g_free(tmp);
+        return;
+    }
 
+    #ifdef ENABLE_MRIM_DEBUG
+    purple_debug_info("mrim", "server connected fd = %d\n", source);
+    #endif
+
+    md->server.fd = source;
+    md->server.read_ih = purple_input_add(md->server.fd, PURPLE_INPUT_READ,
+        mrim_server_canread_cb, md);
+    if (!md->server.read_ih) {
+        purple_connection_error_reason(md->account->gc,
+            PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
+            "Failed to connect to server"
+        );
+        return;
+    }
+    md->server.tx_buf = purple_circ_buffer_new(MRIM_CIRC_BUFFER_GROW);
+    md->server.rx_buf = purple_circ_buffer_new(MRIM_CIRC_BUFFER_GROW);
+    //TODO initiate login
+    mrim_server_send_pkt(md, (MrimPacketHeader*) mrim_pkt_cs_hello());
 }
 
 static void
@@ -107,7 +191,6 @@ mrim_login_balancer_answered(gpointer data, gint source, PurpleInputCondition co
     guint buff_size = 32;
     gchar *buff; /*ipadd + port*/
     gchar **buff_split;
-    PurpleProxyConnectData *connect;
 
     buff = g_malloc0(buff_size);
     read(source, buff, buff_size);
@@ -117,18 +200,18 @@ mrim_login_balancer_answered(gpointer data, gint source, PurpleInputCondition co
     md->server.port = (guint) atoi(buff_split[1]);
     g_strfreev(buff_split);
     g_free(buff);
-    purple_input_remove(md->balancer.input_handler);
-    md->balancer.input_handler = 0;
+    purple_input_remove(md->balancer.read_ih);
+    md->balancer.read_ih = 0;
 
     #ifdef ENABLE_MRIM_DEBUG
-    purple_debug_info("mrim", "connecting to server: %s:%u", md->server.host, 
+    purple_debug_info("mrim", "connecting to server: %s:%u\n", md->server.host, 
         md->server.port);
     #endif
 
-    connect = purple_proxy_connect(NULL, md->account, md->server.host,
+    md->server.connect_data = purple_proxy_connect(NULL, md->account, md->server.host,
                 md->server.port, mrim_login_server_connected, md);
 
-    if (!connect) {
+    if (!md->server.connect_data) {
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
             "Failed to connect to server"
@@ -150,14 +233,14 @@ mrim_login_balancer_connected(gpointer data, gint source, const gchar *error_mes
     }
 
     #ifdef ENABLE_MRIM_DEBUG
-    purple_debug_info("mrim", "balancer connected to %d\n", source);
+    purple_debug_info("mrim", "balancer connected fd = %d\n", source);
     #endif
    
     md->balancer.fd = source;
-    md->balancer.input_handler = purple_input_add(md->balancer.fd, PURPLE_INPUT_READ,
+    md->balancer.read_ih = purple_input_add(md->balancer.fd, PURPLE_INPUT_READ,
             mrim_login_balancer_answered, md);
 
-    if (!md->balancer.input_handler) {
+    if (!md->balancer.read_ih) {
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
             "Unable to connect to balancer"
@@ -169,16 +252,18 @@ mrim_login_balancer_connected(gpointer data, gint source, const gchar *error_mes
 void 
 mrim_login(PurpleAccount *account)
 {
-    PurpleProxyConnectData *connect;
     MrimData *md;
 
     md = g_new0(MrimData, 1);
     md->account = account;
+    md->account->gc->proto_data = md;
     md->balancer.port = (guint) purple_account_get_int(account, 
                 "balancer_port", MRIMPRPL_BALANCER_DEFAULT_PORT);
     md->balancer.host = g_strdup(purple_account_get_string(account, 
                 "balancer_host", MRIMPRPL_BALANCER_DEFAULT_HOST));
-    
+   
+    purple_connection_set_state(md->account->gc, PURPLE_CONNECTING);
+
     #ifdef ENABLE_MRIM_DEBUG
     purple_debug_info("mrim", "resolving balancer host %s:%u", 
                 md->balancer.host, md->balancer.port);

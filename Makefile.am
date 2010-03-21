@@ -2,6 +2,8 @@ MRIM_SOURCES = \
     proto.h \
     mrim.h \
     mrim.c \
+    pkt.h \
+    pkt.c \
     libmrimprpl.c
 
 lib_LTLIBRARIES = libmrimprpl.la

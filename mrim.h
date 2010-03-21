@@ -19,13 +19,18 @@ struct _MrimData
         guint port;
         PurpleProxyConnectData *connect_data;
         gint fd;
-        guint input_handler;
+        guint read_ih;
     } balancer;
 
     struct {
         char *host;
         guint port;
+        PurpleProxyConnectData *connect_data;
         gint fd;
+        guint read_ih;
+        guint write_ih;
+        PurpleCircBuffer *rx_buf;
+        PurpleCircBuffer *tx_buf;
     } server;
 };
 
