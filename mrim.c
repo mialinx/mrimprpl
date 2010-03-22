@@ -3,6 +3,7 @@
 #include <purple.h>
 #include <netinet/in.h>
 #include <string.h>
+#include <errno.h>
 #include "mrim.h"
 #include "pkt.h"
 
@@ -102,17 +103,20 @@ mrim_server_canwrite_cb(gpointer data, gint source, PurpleInputCondition cond)
 {
     MrimData *md = (MrimData*) data;
     guint max_read = 0;
-    gint written = 0;
+    gint bytes_written = 0;
 
-    fprintf(stderr, "server_write\n");
+fprintf(stderr, "server_canwrite_cb\n");
 
     while (max_read = purple_circ_buffer_get_max_read(md->server.tx_buf)) {
-        written = write(source, md->server.tx_buf->outptr, max_read);
-        if (written > 0) {
-            purple_circ_buffer_mark_read(md->server.tx_buf, written);
+        bytes_written = write(source, md->server.tx_buf->outptr, max_read);
+        if (bytes_written > 0) {
+            purple_circ_buffer_mark_read(md->server.tx_buf, bytes_written);
         }
         else {
-            // TODO : think about error handling
+            purple_connection_error_reason(md->account->gc,
+                PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
+                "Server connection was lost"
+            );
         }
     }
 
@@ -126,14 +130,14 @@ mrim_server_send_pkt(MrimData *md, MrimPacketHeader *pkt)
         return FALSE;
     }
 
-    purple_buffer_append(md->server.tx_buf, pkt, MRIM_PKT_TOTAL_LENGTH(pkt));
+    purple_circ_buffer_append(md->server.tx_buf, pkt, MRIM_PKT_TOTAL_LENGTH(pkt));
     if (!md->server.write_ih) {
         md->server.write_ih = purple_input_add(md->server.fd, PURPLE_INPUT_WRITE,
             mrim_server_canwrite_cb, md);
         if (!md->server.write_ih) {
             purple_connection_error_reason(md->account->gc,
                 PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-                "Failed to connect to server" // TODO: more reasonable name ?
+                "Failed to connect to server"
             );
             return FALSE;
         }
@@ -145,7 +149,25 @@ mrim_server_send_pkt(MrimData *md, MrimPacketHeader *pkt)
 static void
 mrim_server_canread_cb(gpointer data, gint source, PurpleInputCondition cond)
 {
-    fprintf(stderr, "server_read\n");
+    #define MRIM_ITERM_BUFF_LEN (4 * 1024)
+
+    MrimData *md = (MrimData*) data;
+    gint bytes_read = 0;
+    gchar buff[MRIM_ITERM_BUFF_LEN];
+
+fprintf(stderr, "server_canread_cb\n");
+
+    while ((bytes_read = read(source, buff, MRIM_ITERM_BUFF_LEN)) > 0) {
+        purple_circ_buffer_append(md->server.rx_buf, buff, bytes_read);
+    }
+    if (bytes_read == 0 || (bytes_read < 0 && errno != EWOULDBLOCK)) {
+        purple_connection_error_reason(md->account->gc,
+            PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
+            "Server connection was lost"
+        );
+        // TODO : Unify resource freeing process
+        purple_input_remove(md->server.read_ih);
+    }
 }
 
 
@@ -180,7 +202,7 @@ mrim_login_server_connected(gpointer data, gint source, const gchar *error_messa
     }
     md->server.tx_buf = purple_circ_buffer_new(MRIM_CIRC_BUFFER_GROW);
     md->server.rx_buf = purple_circ_buffer_new(MRIM_CIRC_BUFFER_GROW);
-    //TODO initiate login
+
     mrim_server_send_pkt(md, (MrimPacketHeader*) mrim_pkt_cs_hello());
 }
 
@@ -233,6 +255,7 @@ mrim_login_balancer_connected(gpointer data, gint source, const gchar *error_mes
     }
 
     #ifdef ENABLE_MRIM_DEBUG
+fprintf(stderr, "balancer conn\n");
     purple_debug_info("mrim", "balancer connected fd = %d\n", source);
     #endif
    
@@ -282,56 +305,67 @@ mrim_login(PurpleAccount *account)
 
 
 /* Performs logout */
+static void
+mrim_free(MrimData *md)
+{
+    if (!md) {
+        return;
+    }
+
+    /* Free balancer structures */
+    if (md->balancer.host) {
+        g_free(md->balancer.host);
+        md->balancer.host = NULL;
+    }
+    md->balancer.port = 0;
+    if (md->balancer.connect_data) {
+        purple_proxy_connect_cancel(md->balancer.connect_data);
+        md->balancer.connect_data = NULL;
+    }
+    md->balancer.fd = 0; /* is ther any need to close connections ? */
+    if (md->balancer.read_ih) {
+        purple_input_remove(md->balancer.read_ih);
+        md->balancer.read_ih = 0;
+    }
+        
+    /* Free server structures */
+    if (md->server.host) {
+        g_free(md->server.host);
+        md->server.host = NULL;
+    }
+    md->server.port = 0;
+    if (md->server.connect_data) {
+        purple_proxy_connect_cancel(md->server.connect_data);
+        md->server.connect_data = NULL;
+    }
+    md->server.fd = 0; /* is ther any need to close connections ? */
+    if (md->server.read_ih) {
+        purple_input_remove(md->server.read_ih);
+        md->server.read_ih = 0;
+    }
+    if (md->server.write_ih) {
+        purple_input_remove(md->server.write_ih);
+        md->server.write_ih = 0;
+    }
+    if (md->server.rx_buf) {
+        purple_circ_buffer_destory(md->server.rx_buf);
+        md->server.rx_buf = NULL;
+    }
+    if (md->server.tx_buf) {
+        purple_circ_buffer_destory(md->server.tx_buf);
+        md->server.tx_buf = NULL;
+    }
+
+    #ifndef ENABLE_MRIM_DEBUG
+    purple_debug_info("mrim", "resources freeed");
+    #endif
+}
+
 void 
 mrim_close(PurpleConnection *gc)
 {
-    MrimData *md;
-    
-    if (gc && (md = gc->proto_data)) {
-
-        /* Free balancer structures */
-        if (md->balancer.host) {
-            g_free(md->balancer.host);
-            md->balancer.host = NULL;
-        }
-        md->balancer.port = 0;
-        if (md->balancer.connect_data) {
-            purple_proxy_connect_cancel(md->balancer.connect_data);
-            md->balancer.connect_data = NULL;
-        }
-        md->balancer.fd = 0; /* is ther any need to close connections ? */
-        if (md->balancer.read_ih) {
-            purple_input_remove(md->balancer.read_ih);
-            md->balancer.read_ih = 0;
-        }
-            
-        /* Free server structures */
-        if (md->server.host) {
-            g_free(md->server.host);
-            md->server.host = NULL;
-        }
-        md->server.port = 0;
-        if (md->server.connect_data) {
-            purple_proxy_connect_cancel(md->server.connect_data);
-            md->server.connect_data = NULL;
-        }
-        md->server.fd = 0; /* is ther any need to close connections ? */
-        if (md->server.read_ih) {
-            purple_input_remove(md->server.read_ih);
-            md->server.read_ih = 0;
-        }
-        if (md->server.write_ih) {
-            purple_input_remove(md->server.write_ih);
-            md->server.write_ih = 0;
-        }
-        if (md->server.rx_buf) {
-            purple_circ_buffer_destory(md->server.rx_buf);
-            md->server.rx_buf = NULL;
-        }
-        if (md->server.tx_buf) {
-            purple_circ_buffer_destory(md->server.tx_buf);
-            md->server.tx_buf = NULL;
-        }
+    if (gc) {
+        mrim_free(gc->proto_data);
     }
 }
 
