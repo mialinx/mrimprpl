@@ -348,11 +348,11 @@ mrim_free(MrimData *md)
         md->server.write_ih = 0;
     }
     if (md->server.rx_buf) {
-        purple_circ_buffer_destory(md->server.rx_buf);
+        purple_circ_buffer_destroy(md->server.rx_buf);
         md->server.rx_buf = NULL;
     }
     if (md->server.tx_buf) {
-        purple_circ_buffer_destory(md->server.tx_buf);
+        purple_circ_buffer_destroy(md->server.tx_buf);
         md->server.tx_buf = NULL;
     }
 
