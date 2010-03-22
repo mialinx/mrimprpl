@@ -285,6 +285,54 @@ mrim_login(PurpleAccount *account)
 void 
 mrim_close(PurpleConnection *gc)
 {
+    MrimData *md;
+    
+    if (gc && (md = gc->proto_data)) {
+
+        /* Free balancer structures */
+        if (md->balancer.host) {
+            g_free(md->balancer.host);
+            md->balancer.host = NULL;
+        }
+        md->balancer.port = 0;
+        if (md->balancer.connect_data) {
+            purple_proxy_connect_cancel(md->balancer.connect_data);
+            md->balancer.connect_data = NULL;
+        }
+        md->balancer.fd = 0; /* is ther any need to close connections ? */
+        if (md->balancer.read_ih) {
+            purple_input_remove(md->balancer.read_ih);
+            md->balancer.read_ih = 0;
+        }
+            
+        /* Free server structures */
+        if (md->server.host) {
+            g_free(md->server.host);
+            md->server.host = NULL;
+        }
+        md->server.port = 0;
+        if (md->server.connect_data) {
+            purple_proxy_connect_cancel(md->server.connect_data);
+            md->server.connect_data = NULL;
+        }
+        md->server.fd = 0; /* is ther any need to close connections ? */
+        if (md->server.read_ih) {
+            purple_input_remove(md->server.read_ih);
+            md->server.read_ih = 0;
+        }
+        if (md->server.write_ih) {
+            purple_input_remove(md->server.write_ih);
+            md->server.write_ih = 0;
+        }
+        if (md->server.rx_buf) {
+            purple_circ_buffer_destory(md->server.rx_buf);
+            md->server.rx_buf = NULL;
+        }
+        if (md->server.tx_buf) {
+            purple_circ_buffer_destory(md->server.tx_buf);
+            md->server.tx_buf = NULL;
+        }
+    }
 }
 
 /*
