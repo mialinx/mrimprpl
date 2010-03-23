@@ -1,3 +1,4 @@
+#include <purple.h>
 #include "proto.h"
 
 typedef struct
@@ -15,4 +16,12 @@ typedef struct {
     MrimPacketHeader header;
 } MrimPktCsHello;
 
-MrimPktCsHello * mrim_pkt_cs_hello();
+MrimPktCsHello* mrim_pkt_cs_hello();
+
+/* Server to Client messages */
+typedef struct {
+    MrimPacketHeader header;
+    guint32 timeout;
+} MrimPktScHelloAck;
+
+MrimPacketHeader* mrim_pkt_parse(PurpleCircBuffer *buf);

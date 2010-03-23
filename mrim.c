@@ -176,7 +176,8 @@ static void
 mrim_login_server_connected(gpointer data, gint source, const gchar *error_message)
 {
     MrimData *md = (MrimData*) data;
-    
+
+    md->server.connect_data = NULL;
     if (source < 0) {
         gchar *tmp = g_strdup_printf("Failed to connect to server: %s\n", error_message);
         purple_connection_error_reason(md->account->gc,
@@ -246,6 +247,7 @@ static void
 mrim_login_balancer_connected(gpointer data, gint source, const gchar *error_message) {
     MrimData *md = (MrimData*) data;
 
+    md->balancer.connect_data = NULL;
     if (source < 0) {
         gchar *tmp = g_strdup_printf("Unable to connect to balancer %s", error_message);
         purple_connection_error_reason(md->account->gc,
@@ -255,7 +257,6 @@ mrim_login_balancer_connected(gpointer data, gint source, const gchar *error_mes
     }
 
     #ifdef ENABLE_MRIM_DEBUG
-fprintf(stderr, "balancer conn\n");
     purple_debug_info("mrim", "balancer connected fd = %d\n", source);
     #endif
    
@@ -357,7 +358,7 @@ mrim_free(MrimData *md)
     }
 
     #ifndef ENABLE_MRIM_DEBUG
-    purple_debug_info("mrim", "resources freeed");
+    purple_debug_info("mrim", "resources freeed\n");
     #endif
 }
 
