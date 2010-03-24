@@ -148,13 +148,20 @@ mrim_server_send_pkt(MrimData *md, MrimPktHeader *pkt)
 }
 
 static void
+mrim_server_dispatch_pkt(MrimData *md, MrimPktHeader *pkt)
+{
+fprintf(stderr, "dispatching message: %x\n", pkt->msg);
+}
+
+static void
 mrim_server_canread_cb(gpointer data, gint source, PurpleInputCondition cond)
 {
-    #define MRIM_ITERM_BUFF_LEN (4 * 1024)
 
     MrimData *md = (MrimData*) data;
     gint bytes_read = 0;
+    #define MRIM_ITERM_BUFF_LEN (4 * 1024)
     gchar buff[MRIM_ITERM_BUFF_LEN];
+    MrimPktHeader *pkt = NULL;
 
 fprintf(stderr, "server_canread_cb\n");
 
@@ -167,6 +174,12 @@ fprintf(stderr, "server_canread_cb\n");
             "Server connection was lost"
         );
         purple_input_remove(md->server.read_ih);
+    }
+    else {
+        if (pkt = mrim_pkt_parse(md)) {
+            mrim_server_dispatch_pkt(md, pkt);
+            mrim_pkt_free(pkt);
+        }
     }
 }
 

@@ -64,10 +64,54 @@ mrim_pkt_cs_hello()
 }
 
 /* Server to Client messages */
+
+/* Parses server packet in circle buffer, using rx_pkt_buf
+ * as addtional linear temporary buffer.
+ * Returns NULL if there is no sufficient data received to 
+ * construct new packet
+ */
 MrimPktHeader *
 mrim_pkt_parse(MrimData *md)
 {
     guint max_read = 0;
-    /* TODO: parse algo */
-    return NULL;
+    MrimPktHeader *pkt = NULL;
+
+    /* copy complete packet header to the linear buffer */
+    while (md->server.rx_pkt_buf->len < MRIM_PKT_HEADER_LENGTH) {
+        max_read = purple_circ_buffer_get_max_read(md->server.rx_buf);
+        if (!max_read) {
+            return NULL; /* try again later */
+        }
+        else {
+            md->server.rx_pkt_buf = g_string_append_len(
+                md->server.rx_pkt_buf,
+                md->server.rx_buf->outptr,
+                max_read
+            );
+            purple_circ_buffer_mark_read(md->server.rx_buf, max_read);
+        }
+    }
+    pkt = (MrimPktHeader*) md->server.rx_pkt_buf->str;
+
+    /* copy whole packet to the linear buffer */
+    while (md->server.rx_pkt_buf->len < MRIM_PKT_TOTAL_LENGTH(pkt)) {
+        max_read = purple_circ_buffer_get_max_read(md->server.rx_buf);
+        if (!max_read) {
+            return NULL; /* try again later */
+        }
+        else {
+            md->server.rx_pkt_buf = g_string_append_len(
+                md->server.rx_pkt_buf,
+                md->server.rx_buf->outptr,
+                max_read
+            );
+            purple_circ_buffer_mark_read(md->server.rx_buf, max_read);
+        }
+    }
+   
+    /* ok, now we have complete packet. copy it and empty buffer */
+    pkt = g_memdup(md->server.rx_pkt_buf->str, MRIM_PKT_TOTAL_LENGTH(pkt));
+    g_string_truncate(md->server.rx_pkt_buf, 0);
+
+    return pkt;
 }

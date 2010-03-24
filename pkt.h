@@ -11,6 +11,7 @@ typedef struct
 typedef mrim_packet_header_t MrimPktHeader;
 
 #define MRIM_PKT_TOTAL_LENGTH(pkt) (pkt->dlen + sizeof(MrimPktHeader))
+#define MRIM_PKT_HEADER_LENGTH (sizeof(MrimPktHeader))
 
 /* Common routines */
 void mrim_pkt_free(MrimPktHeader *pkt);
