@@ -19,7 +19,7 @@ mrim_pkt_str2lps(const gchar *str)
 }
 
 static void
-mrim_pkt_init_header(MrimPacketHeader *header, guint32 seq, guint32 msg, guint32 dlen) 
+mrim_pkt_init_header(MrimPktHeader *header, guint32 seq, guint32 msg, guint32 dlen) 
 {
     if (header) {
         header->magic = CS_MAGIC;
@@ -30,11 +30,44 @@ mrim_pkt_init_header(MrimPacketHeader *header, guint32 seq, guint32 msg, guint32
     }
 }
 
-/* Client to Server messages */
+/* Common routines */
+void
+mrim_pkt_free(MrimPktHeader *pkt) 
+{
+    if (pkt) {
+        switch (pkt->msg) {
+            case MRIM_CS_HELLO:
+                g_free(pkt);
+                break;
+            case MRIM_CS_HELLO_ACK:
+                g_free(pkt);
+                break;
+            default:
+                #ifdef ENABLE_MRIM_DEBUG
+                purple_debug_info("mrim", "unsupported type of packet %u\n", 
+                    (guint) pkt->msg);
+                #endif
+                break;
+        }
+    }
+}
 
-MrimPktCsHello *
-mrim_pkt_cs_hello() {
-    MrimPktCsHello *pkt = g_new0(MrimPktCsHello, 1);
+/* Client to Server messages */
+MrimPktHeader *
+mrim_pkt_cs_hello() 
+{
+    MrimPktHeader *pkt = NULL;
+
+    pkt = (MrimPktHeader*) g_malloc0(sizeof(MrimPktCsHello));
     mrim_pkt_init_header(pkt, 0, MRIM_CS_HELLO, 0);
     return pkt;
+}
+
+/* Server to Client messages */
+MrimPktHeader *
+mrim_pkt_parse(MrimData *md)
+{
+    guint max_read = 0;
+    /* TODO: parse algo */
+    return NULL;
 }

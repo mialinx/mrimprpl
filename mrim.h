@@ -30,6 +30,7 @@ struct _MrimData
         guint read_ih;
         guint write_ih;
         PurpleCircBuffer *rx_buf;
+        GString *rx_pkt_buf; /* linear rx buffer for one packet */
         PurpleCircBuffer *tx_buf;
     } server;
 };

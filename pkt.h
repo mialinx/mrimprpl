@@ -1,4 +1,5 @@
 #include <purple.h>
+#include "mrim.h"
 #include "proto.h"
 
 typedef struct
@@ -7,21 +8,24 @@ typedef struct
     gchar *data;
 } MrimPktLps;
 
-typedef mrim_packet_header_t MrimPacketHeader;
+typedef mrim_packet_header_t MrimPktHeader;
 
-#define MRIM_PKT_TOTAL_LENGTH(pkt) (pkt->dlen + sizeof(MrimPacketHeader))
+#define MRIM_PKT_TOTAL_LENGTH(pkt) (pkt->dlen + sizeof(MrimPktHeader))
+
+/* Common routines */
+void mrim_pkt_free(MrimPktHeader *pkt);
 
 /* Client to Server messages */
 typedef struct {
-    MrimPacketHeader header;
+    MrimPktHeader header;
 } MrimPktCsHello;
 
-MrimPktCsHello* mrim_pkt_cs_hello();
+MrimPktHeader* mrim_pkt_cs_hello();
 
 /* Server to Client messages */
 typedef struct {
-    MrimPacketHeader header;
+    MrimPktHeader header;
     guint32 timeout;
 } MrimPktScHelloAck;
 
-MrimPacketHeader* mrim_pkt_parse(PurpleCircBuffer *buf);
+MrimPktHeader* mrim_pkt_parse(MrimData *md);

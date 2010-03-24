@@ -8,6 +8,7 @@
 #include "pkt.h"
 
 #define MRIM_CIRC_BUFFER_GROW (16 * 1024)
+#define MRIM_LINR_BUFFER_INIT (1024)
 
 /*
  * Returns the base icon name for the given buddy and account.
@@ -124,7 +125,7 @@ fprintf(stderr, "server_canwrite_cb\n");
 }
 
 static gboolean
-mrim_server_send_pkt(MrimData *md, MrimPacketHeader *pkt)
+mrim_server_send_pkt(MrimData *md, MrimPktHeader *pkt)
 {
     if (!pkt) {
         return FALSE;
@@ -165,7 +166,6 @@ fprintf(stderr, "server_canread_cb\n");
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
             "Server connection was lost"
         );
-        // TODO : Unify resource freeing process
         purple_input_remove(md->server.read_ih);
     }
 }
@@ -176,6 +176,7 @@ static void
 mrim_login_server_connected(gpointer data, gint source, const gchar *error_message)
 {
     MrimData *md = (MrimData*) data;
+    MrimPktHeader *pkt = NULL;
 
     md->server.connect_data = NULL;
     if (source < 0) {
@@ -201,10 +202,10 @@ mrim_login_server_connected(gpointer data, gint source, const gchar *error_messa
         );
         return;
     }
-    md->server.tx_buf = purple_circ_buffer_new(MRIM_CIRC_BUFFER_GROW);
-    md->server.rx_buf = purple_circ_buffer_new(MRIM_CIRC_BUFFER_GROW);
 
-    mrim_server_send_pkt(md, (MrimPacketHeader*) mrim_pkt_cs_hello());
+    pkt = mrim_pkt_cs_hello();
+    mrim_server_send_pkt(md, pkt);
+    mrim_pkt_free(pkt);
 }
 
 static void
@@ -302,6 +303,10 @@ mrim_login(PurpleAccount *account)
         );
         return;
     }
+
+    md->server.tx_buf = purple_circ_buffer_new(MRIM_CIRC_BUFFER_GROW);
+    md->server.rx_buf = purple_circ_buffer_new(MRIM_CIRC_BUFFER_GROW);
+    md->server.rx_pkt_buf = g_string_sized_new(MRIM_LINR_BUFFER_INIT);
 }
 
 
@@ -351,6 +356,10 @@ mrim_free(MrimData *md)
     if (md->server.rx_buf) {
         purple_circ_buffer_destroy(md->server.rx_buf);
         md->server.rx_buf = NULL;
+    }
+    if (md->server.rx_pkt_buf) {
+        g_string_free(md->server.rx_pkt_buf, TRUE);
+        md->server.rx_pkt_buf = NULL;
     }
     if (md->server.tx_buf) {
         purple_circ_buffer_destroy(md->server.tx_buf);
