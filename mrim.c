@@ -124,14 +124,9 @@ fprintf(stderr, "server_canwrite_cb\n");
     purple_input_remove(md->server.write_ih);
 }
 
-static gboolean
-mrim_server_send_pkt(MrimData *md, MrimPktHeader *pkt)
+void
+mrim_server_send_out(MrimData *md)
 {
-    if (!pkt) {
-        return FALSE;
-    }
-
-    purple_circ_buffer_append(md->server.tx_buf, pkt, MRIM_PKT_TOTAL_LENGTH(pkt));
     if (!md->server.write_ih) {
         md->server.write_ih = purple_input_add(md->server.fd, PURPLE_INPUT_WRITE,
             mrim_server_canwrite_cb, md);
@@ -140,17 +135,16 @@ mrim_server_send_pkt(MrimData *md, MrimPktHeader *pkt)
                 PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
                 "Failed to connect to server"
             );
-            return FALSE;
         }
     }
-
-    return TRUE;
 }
 
 static void
 mrim_server_dispatch_pkt(MrimData *md, MrimPktHeader *pkt)
 {
-fprintf(stderr, "dispatching message: %x\n", pkt->msg);
+    #ifdef ENABLE_MRIM_DEBUG
+    purple_debug_info("mrim", "dispatching message: %x\n", pkt->msg);
+    #endif
 }
 
 static void
@@ -189,7 +183,6 @@ static void
 mrim_login_server_connected(gpointer data, gint source, const gchar *error_message)
 {
     MrimData *md = (MrimData*) data;
-    MrimPktHeader *pkt = NULL;
 
     md->server.connect_data = NULL;
     if (source < 0) {
@@ -216,9 +209,8 @@ mrim_login_server_connected(gpointer data, gint source, const gchar *error_messa
         return;
     }
 
-    pkt = mrim_pkt_cs_hello();
-    mrim_server_send_pkt(md, pkt);
-    mrim_pkt_free(pkt);
+    mrim_pkt_build_hello(md);
+    mrim_server_send_out(md);
 }
 
 static void

@@ -2,31 +2,47 @@
 #include "mrim.h"
 #include "proto.h"
 
-typedef struct
-{
+#define MRIM_PKT_TOTAL_LENGTH(pkt) (pkt->dlen + sizeof(MrimPktHeader))
+#define MRIM_PKT_HEADER_LENGTH (sizeof(MrimPktHeader))
+
+typedef struct {
     guint32 length;
     gchar *data;
 } MrimPktLps;
 
 typedef mrim_packet_header_t MrimPktHeader;
 
-#define MRIM_PKT_TOTAL_LENGTH(pkt) (pkt->dlen + sizeof(MrimPktHeader))
-#define MRIM_PKT_HEADER_LENGTH (sizeof(MrimPktHeader))
+typedef mrim_packet_header_t MrimPktLocal;
 
 /* Common routines */
-void mrim_pkt_free(MrimPktHeader *pkt);
+void
+mrim_pkt_free(MrimPktLocal *pkt);
 
 /* Client to Server messages */
-typedef struct {
-    MrimPktHeader header;
-} MrimPktCsHello;
+void
+mrim_pkt_build_hello(MrimData *md);
 
-MrimPktHeader* mrim_pkt_cs_hello();
+void
+mrim_pkt_build_login(MrimData *md, gchar *login, gchar *pass,
+                    guint32 status, gchar *agent);
+
+void
+mrim_pkt_build_ping(MrimData *md);
 
 /* Server to Client messages */
 typedef struct {
-    MrimPktHeader header;
+    MrimPktLocal header;
     guint32 timeout;
-} MrimPktScHelloAck;
+} MrimPktHelloAck;
 
-MrimPktHeader* mrim_pkt_parse(MrimData *md);
+typedef struct {
+    MrimPktLocal header;
+} MrimPktLoginAck;
+
+typedef struct {
+    MrimPktLocal header;
+    gchar *reason;
+} MrimPktLoginRej;
+
+MrimPktLocal *
+mrim_pkt_parse(MrimData *md);
