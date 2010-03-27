@@ -100,36 +100,38 @@ mrim_blist_node_menu (PurpleBlistNode *node)
 /* Basic read/write ops */
 
 static void
-mrim_server_canwrite_cb(gpointer data, gint source, PurpleInputCondition cond)
+_mrim_server_canwrite_cb(gpointer data, gint source, PurpleInputCondition cond)
 {
     MrimData *md = (MrimData*) data;
     guint max_read = 0;
     gint bytes_written = 0;
 
-fprintf(stderr, "server_canwrite_cb\n");
+fprintf(stderr, "canwrite_cb\n");
 
     while (max_read = purple_circ_buffer_get_max_read(md->server.tx_buf)) {
         bytes_written = write(source, md->server.tx_buf->outptr, max_read);
+fprintf(stderr, "canwrite_cb: max_read %u bytes written %d\n", max_read, bytes_written);
         if (bytes_written > 0) {
             purple_circ_buffer_mark_read(md->server.tx_buf, bytes_written);
         }
         else {
             purple_connection_error_reason(md->account->gc,
                 PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-                "Server connection was lost"
+                "Server connection was lost 1"
             );
         }
     }
 
     purple_input_remove(md->server.write_ih);
+    md->server.write_ih = 0;
 }
 
 void
-mrim_server_send_out(MrimData *md)
+_mrim_server_send_out(MrimData *md)
 {
     if (!md->server.write_ih) {
         md->server.write_ih = purple_input_add(md->server.fd, PURPLE_INPUT_WRITE,
-            mrim_server_canwrite_cb, md);
+            _mrim_server_canwrite_cb, md);
         if (!md->server.write_ih) {
             purple_connection_error_reason(md->account->gc,
                 PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
@@ -140,39 +142,109 @@ mrim_server_send_out(MrimData *md)
 }
 
 static void
-mrim_server_dispatch_pkt(MrimData *md, MrimPktHeader *pkt)
+_mrim_dispatch_hello_ack(MrimData *md, MrimPktHelloAck *pkt)
 {
-    #ifdef ENABLE_MRIM_DEBUG
-    purple_debug_info("mrim", "dispatching message: %x\n", pkt->msg);
-    #endif
+    const char *login, *pass, *agent;
+
+    md->account->gc->keepalive = pkt->timeout;
+
+    login = purple_account_get_username(md->account);
+    pass = purple_account_get_password(md->account);
+    agent = "pdgn";
+
+    /* TODO why Mrim server closes connection ? */
+    mrim_pkt_build_login(md, login, pass, STATUS_ONLINE, agent);
+    _mrim_server_send_out(md);
 }
 
 static void
-mrim_server_canread_cb(gpointer data, gint source, PurpleInputCondition cond)
+_mrim_dispatch_login_ack(MrimData *md, MrimPktLoginAck *pkt)
+{
+}
+
+static void
+_mrim_dispatch_login_rej(MrimData *md, MrimPktLoginRej *pkt)
+{
+}
+
+static void
+_mrim_dispatch_pkt(MrimData *md, MrimPktHeader *pkt)
+{
+    #ifdef ENABLE_MRIM_DEBUG
+    purple_debug_info("mrim", "dispatching message: 0x%X\n", pkt->msg);
+    #endif
+
+    switch (pkt->msg) {
+        case MRIM_CS_HELLO_ACK:
+            _mrim_dispatch_hello_ack(md, (MrimPktHelloAck*) pkt);
+            break;
+        case MRIM_CS_LOGIN_ACK:
+            _mrim_dispatch_login_ack(md, (MrimPktLoginAck*) pkt);
+            break;
+        case MRIM_CS_LOGIN_REJ:
+            _mrim_dispatch_login_rej(md, (MrimPktLoginRej*) pkt);
+            break;
+        case MRIM_CS_MESSAGE_ACK:
+            break;
+        case MRIM_CS_MESSAGE_STATUS:
+            break;
+        case MRIM_CS_USER_STATUS:
+            break;
+        case MRIM_CS_LOGOUT:
+            break;
+        case MRIM_CS_CONNECTION_PARAMS:
+            break;
+        case MRIM_CS_USER_INFO:
+            break;
+        case MRIM_CS_ADD_CONTACT_ACK:
+            break;
+        case MRIM_CS_MODIFY_CONTACT_ACK:
+            break;
+        case MRIM_CS_OFFLINE_MESSAGE_ACK:
+            break;
+        case MRIM_CS_AUTHORIZE_ACK:
+            break;
+        case MRIM_CS_MPOP_SESSION:
+            break;
+        default:
+            break;
+    }
+}
+
+static void
+_mrim_server_canread_cb(gpointer data, gint source, PurpleInputCondition cond)
 {
 
-    MrimData *md = (MrimData*) data;
+    MrimData *md = NULL;
     gint bytes_read = 0;
     #define MRIM_ITERM_BUFF_LEN (4 * 1024)
     gchar buff[MRIM_ITERM_BUFF_LEN];
     MrimPktHeader *pkt = NULL;
 
-fprintf(stderr, "server_canread_cb\n");
+fprintf(stderr, "canread_cb\n");
 
+    md = (MrimData*) data;
     while ((bytes_read = read(source, buff, MRIM_ITERM_BUFF_LEN)) > 0) {
+fprintf(stderr, "canread_cb: bytes_read %d\n", bytes_read);
         purple_circ_buffer_append(md->server.rx_buf, buff, bytes_read);
     }
     if (bytes_read == 0 || (bytes_read < 0 && errno != EWOULDBLOCK)) {
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-            "Server connection was lost"
+            "Server connection was lost 2"
         );
         purple_input_remove(md->server.read_ih);
+        md->server.read_ih = 0;
     }
     else {
+fprintf(stderr, "canread_cb: trying to parse\n");
         if (pkt = mrim_pkt_parse(md)) {
-            mrim_server_dispatch_pkt(md, pkt);
+fprintf(stderr, "canread_cb: yaha\n");
+            _mrim_dispatch_pkt(md, pkt);
             mrim_pkt_free(pkt);
+        }
+        else {
+fprintf(stderr, "canread_cb: nop yet\n");
         }
     }
 }
@@ -180,7 +252,7 @@ fprintf(stderr, "server_canread_cb\n");
 
 /* Perform login */
 static void
-mrim_login_server_connected(gpointer data, gint source, const gchar *error_message)
+_mrim_login_server_connected(gpointer data, gint source, const gchar *error_message)
 {
     MrimData *md = (MrimData*) data;
 
@@ -200,7 +272,7 @@ mrim_login_server_connected(gpointer data, gint source, const gchar *error_messa
 
     md->server.fd = source;
     md->server.read_ih = purple_input_add(md->server.fd, PURPLE_INPUT_READ,
-        mrim_server_canread_cb, md);
+        _mrim_server_canread_cb, md);
     if (!md->server.read_ih) {
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
@@ -210,11 +282,11 @@ mrim_login_server_connected(gpointer data, gint source, const gchar *error_messa
     }
 
     mrim_pkt_build_hello(md);
-    mrim_server_send_out(md);
+    _mrim_server_send_out(md);
 }
 
 static void
-mrim_login_balancer_answered(gpointer data, gint source, PurpleInputCondition cond)
+_mrim_login_balancer_answered(gpointer data, gint source, PurpleInputCondition cond)
 {
     MrimData *md = (MrimData*) data;
     guint buff_size = 32;
@@ -238,7 +310,7 @@ mrim_login_balancer_answered(gpointer data, gint source, PurpleInputCondition co
     #endif
 
     md->server.connect_data = purple_proxy_connect(NULL, md->account, md->server.host,
-                md->server.port, mrim_login_server_connected, md);
+                md->server.port, _mrim_login_server_connected, md);
 
     if (!md->server.connect_data) {
         purple_connection_error_reason(md->account->gc,
@@ -250,7 +322,7 @@ mrim_login_balancer_answered(gpointer data, gint source, PurpleInputCondition co
 }
 
 static void 
-mrim_login_balancer_connected(gpointer data, gint source, const gchar *error_message) {
+_mrim_login_balancer_connected(gpointer data, gint source, const gchar *error_message) {
     MrimData *md = (MrimData*) data;
 
     md->balancer.connect_data = NULL;
@@ -268,7 +340,7 @@ mrim_login_balancer_connected(gpointer data, gint source, const gchar *error_mes
    
     md->balancer.fd = source;
     md->balancer.read_ih = purple_input_add(md->balancer.fd, PURPLE_INPUT_READ,
-            mrim_login_balancer_answered, md);
+            _mrim_login_balancer_answered, md);
 
     if (!md->balancer.read_ih) {
         purple_connection_error_reason(md->account->gc,
@@ -300,7 +372,7 @@ mrim_login(PurpleAccount *account)
     #endif
 
     md->balancer.connect_data = purple_proxy_connect(NULL, md->account, 
-        md->balancer.host, md->balancer.port, mrim_login_balancer_connected, md);
+        md->balancer.host, md->balancer.port, _mrim_login_balancer_connected, md);
     if (!md->balancer.connect_data) {
         purple_connection_error_reason(account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
@@ -474,6 +546,14 @@ mrim_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group)
 void 
 mrim_keepalive(PurpleConnection *gc)
 {
+    MrimData *md = NULL;
+
+fprintf(stderr, "Keepalive\n");
+
+    if (md = gc->proto_data) {
+        mrim_pkt_build_ping(md);
+        _mrim_server_send_out(md);
+    }
 }
 
 /* Chane a buddy group on a server */
