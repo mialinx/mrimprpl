@@ -150,7 +150,7 @@ _mrim_dispatch_hello_ack(MrimData *md, MrimPktHelloAck *pkt)
 
     login = purple_account_get_username(md->account);
     pass = purple_account_get_password(md->account);
-    agent = "pdgn";
+    agent = "Mail.ru pidgin plugin v0.01";
 
     /* TODO why Mrim server closes connection ? */
     mrim_pkt_build_login(md, login, pass, STATUS_ONLINE, agent);
