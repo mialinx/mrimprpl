@@ -34,12 +34,20 @@ typedef struct {
     gchar *reason;
 } MrimPktLoginRej;
 
-/* . . . */
+typedef struct {
+    MrimPktHeader header;
+    GHashTable *info;
+} MrimPktUserInfo;
 
 typedef struct {
     MrimPktHeader header;
     guint32 timeout;
 } MrimPktConnectionParam;
+
+typedef struct {
+    MrimPktHeader header;
+    guint32 reason;
+} MrimPktLogout;
 
 MrimPktHeader *
 mrim_pkt_parse(MrimData *md);

@@ -129,11 +129,11 @@ mrim_pkt_build_ping(MrimData *md)
    Returns NULL if there are not sufficient bytes in circle buffer
 */
 
-MrimPktHeader *
-_mrim_pkt_collect(MrimData *md)
+static MrimPktHeader *
+_collect(MrimData *md)
 {
     guint available = 0;
-    guint need_read = 0;
+    gint need_read = 0;
     MrimPktHeader *pkt = NULL;
 
     /* copy complete packet header to the linear buffer */
@@ -151,7 +151,7 @@ _mrim_pkt_collect(MrimData *md)
         }
     }
     pkt = (MrimPktHeader*) md->server.rx_pkt_buf->str;
-
+/* BUG IS HERE */
     /* copy whole packet to the linear buffer */
     while ((need_read = MRIM_PKT_PKT_LEN(pkt) - md->server.rx_pkt_buf->len) > 0) {
         if (!(available = purple_circ_buffer_get_max_read(md->server.rx_buf))) {
@@ -208,10 +208,13 @@ mrim_pkt_parse(MrimData *md)
     MrimPktHeader *loc = NULL;
     MrimPktHeader *pkt = NULL;
     guint32 pos = 0;
+    gchar *tmp = NULL, *tmp2 = NULL;
 
-    if (!(pkt = _mrim_pkt_collect(md))) {
+    if (!(pkt = _collect(md))) {
         return NULL;
     }
+
+fprintf(stderr, "MSG %x\n", GUINT32_FROM_LE(pkt->msg));
 
     switch (GUINT32_FROM_LE(pkt->msg)) {
         case MRIM_CS_HELLO_ACK:
@@ -236,6 +239,8 @@ mrim_pkt_parse(MrimData *md)
         case MRIM_CS_USER_STATUS:
             break;
         case MRIM_CS_LOGOUT:
+            loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktLogout));
+            ((MrimPktLogout*)loc)->reason = _read_ul(pkt, &pos);
             break;
         case MRIM_CS_CONNECTION_PARAMS:
             loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktConnectionParam));
@@ -243,6 +248,14 @@ mrim_pkt_parse(MrimData *md)
             ((MrimPktConnectionParam *)loc)->timeout = _read_ul(pkt, &pos);
             break;
         case MRIM_CS_USER_INFO:
+            loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktUserInfo));
+            ((MrimPktUserInfo *)loc)->info = g_hash_table_new_full(NULL, NULL, g_free, g_free);
+            _read_header(pkt, loc, &pos);
+            while (pos < loc->dlen) {
+                tmp = _read_lps(pkt, &pos);
+                tmp2 = _read_lps(pkt, &pos);
+                g_hash_table_insert(((MrimPktUserInfo *)loc)->info, tmp, tmp2);
+            }
             break;
         case MRIM_CS_ADD_CONTACT_ACK:
             break;
@@ -289,11 +302,14 @@ mrim_pkt_free(MrimPktHeader *pkt)
             case MRIM_CS_USER_STATUS:
                 break;
             case MRIM_CS_LOGOUT:
+                g_free(pkt);
                 break;
             case MRIM_CS_CONNECTION_PARAMS:
                 g_free(pkt);
                 break;
             case MRIM_CS_USER_INFO:
+                g_hash_table_destroy(((MrimPktUserInfo *)pkt)->info);
+                g_free(pkt);
                 break;
             case MRIM_CS_ADD_CONTACT_ACK:
                 break;

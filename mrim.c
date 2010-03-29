@@ -221,6 +221,12 @@ _dispatch_connection_param(MrimData *md, MrimPktConnectionParam *pkt)
 }
 
 static void
+_dispatch_logout(MrimData *md, MrimPktLogout *pkt)
+{
+    purple_account_disconnect(md->account);
+}
+
+static void
 _dispatch(MrimData *md, MrimPktHeader *pkt)
 {
     #ifdef ENABLE_MRIM_DEBUG
@@ -244,6 +250,7 @@ _dispatch(MrimData *md, MrimPktHeader *pkt)
         case MRIM_CS_USER_STATUS:
             break;
         case MRIM_CS_LOGOUT:
+            _dispatch_logout(md, (MrimPktLogout*) pkt);
             break;
         case MRIM_CS_CONNECTION_PARAMS:
             _dispatch_connection_param(md, (MrimPktConnectionParam*) pkt);
@@ -268,18 +275,22 @@ _dispatch(MrimData *md, MrimPktHeader *pkt)
 static void
 _canread_cb(gpointer data, gint source, PurpleInputCondition cond)
 {
-
     MrimData *md = NULL;
     gint bytes_read = 0;
     #define MRIM_ITERM_BUFF_LEN (4 * 1024)
     gchar buff[MRIM_ITERM_BUFF_LEN];
     MrimPktHeader *pkt = NULL;
 
+fprintf(stderr, ">>>>>>>>>>\n");
+
     md = (MrimData*) data;
     while ((bytes_read = read(source, buff, MRIM_ITERM_BUFF_LEN)) > 0) {
+fprintf(stderr, "bytes read %d\n", bytes_read);
         purple_circ_buffer_append(md->server.rx_buf, buff, bytes_read);
     }
+
     if (bytes_read == 0 || (bytes_read < 0 && errno != EWOULDBLOCK)) {
+perror("fuck\n");
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
             "Server connection was lost 2"
@@ -288,11 +299,13 @@ _canread_cb(gpointer data, gint source, PurpleInputCondition cond)
         md->server.read_handle = 0;
     }
     else {
-        if (pkt = mrim_pkt_parse(md)) {
+        while (pkt = mrim_pkt_parse(md)) {
+fprintf(stderr, "!! PARSED %x\n", pkt->msg);
             _dispatch(md, pkt);
             mrim_pkt_free(pkt);
         }
     }
+fprintf(stderr, "<<<<<<<<\n");
 }
 
 
