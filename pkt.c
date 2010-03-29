@@ -2,17 +2,61 @@
 #include <string.h>
 #include "pkt.h"
 
+/* Common utils */
+
+#define MRIM_PKT_PKT_LEN(pkt) (GUINT32_FROM_LE(pkt->dlen) + sizeof(MrimPktHeader))
+#define MRIM_PKT_LPS_LEN(lps) (GUINT32_FROM_LE((lps)->length) + sizeof((lps)->length))
+
 typedef struct {
     guint32 length;
     gchar data[];
 } MrimPktLps;
 
-#define MRIM_PKT_TOTAL_LEN(pkt) (GUINT32_FROM_LE(pkt->dlen) + sizeof(MrimPktHeader))
-#define MRIM_PKT_LPS_LEN(lps) (GUINT32_FROM_LE((lps)->length) + sizeof((lps)->length))
+static MrimPktLps *
+_str2lps(const gchar *str)
+{
+    gchar *data = NULL;
+    guint32 data_len = 0;
+    G_CONST_RETURN char *local_charset = NULL;
+    MrimPktLps *lps = NULL;
+    GError *err = NULL;
+
+    g_get_charset(&local_charset);
+    data = g_convert(str, strlen(str), "WINDOWS-1251", local_charset, NULL, &data_len, &err);
+    if (!data) {
+        fprintf(stderr, "FAILED STR2LPS: bad encoding %s\n", err->message);
+        return NULL;
+    }
+
+    lps = (MrimPktLps*) g_malloc0(sizeof(guint32) + data_len);
+    lps->length = GUINT32_TO_LE(data_len);
+    memcpy(lps->data, data, data_len);
+    g_free(data);
+    return lps;
+}
+
+static gchar *
+_lps2str(MrimPktLps *lps)
+{
+    gchar *str = NULL;
+    guint32 str_len = 0;
+    G_CONST_RETURN char *local_charset = NULL;
+    GError *err = NULL;
+
+    g_get_charset(&local_charset);
+    str = g_convert(lps->data, lps->length, local_charset, "WINDOWS-1251", NULL, &str_len, &err);
+    if (!str) {
+        fprintf(stderr, "FAILED STR2LPS: bad encoding %s\n", err->message);
+        return NULL;
+    }
+
+    return str;
+}
 
 /* Client to Server messages */
+
 static void
-_mrim_pkt_init_header(MrimPktHeader *header, guint32 seq, guint32 msg, guint32 dlen)
+_init_header(MrimPktHeader *header, guint32 seq, guint32 msg, guint32 dlen)
 {
     header->magic = GUINT32_TO_LE(CS_MAGIC);
     header->proto = GUINT32_TO_LE(PROTO_VERSION);
@@ -24,56 +68,31 @@ _mrim_pkt_init_header(MrimPktHeader *header, guint32 seq, guint32 msg, guint32 d
     memset(header->reserved, '\0', 16);
 }
 
-static MrimPktLps *
-_mrim_pkt_str2lps(gchar *str)
-{
-    guint32 len = 0;
-    gchar *conv = NULL;
-    guint32 conv_len = 0;
-    G_CONST_RETURN char *local_charset = NULL;
-    MrimPktLps *lps = NULL;
-    GError *err = NULL;
-
-    len = strlen(str);
-    g_get_charset(&local_charset);
-    conv = g_convert(str, len, "WINDOWS-1251", local_charset, NULL, &conv_len, &err);
-    if (!conv) {
-        fprintf(stderr, "FAILED STR2LPS: bad encoding %s\n", err->message);
-        return NULL;
-    }
-
-    lps = (MrimPktLps*) g_malloc0(sizeof(guint32) + conv_len);
-    lps->length = GUINT32_TO_LE(conv_len);
-    memcpy(lps->data, conv, conv_len);
-    g_free(conv);
-    return lps;
-}
-
 void
 mrim_pkt_build_hello(MrimData *md) 
 {
     MrimPktHeader header;
-    _mrim_pkt_init_header(&header, 0, MRIM_CS_HELLO, 0);
+    _init_header(&header, ++md->tx_seq, MRIM_CS_HELLO, 0);
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
 }
 
 void
-mrim_pkt_build_login(MrimData *md, gchar *login, gchar *pass,
-                    guint32 status, gchar *agent)
+mrim_pkt_build_login(MrimData *md, const gchar *login, const gchar *pass,
+                    guint32 status, const gchar *agent)
 {
     MrimPktLps *lps_login = NULL, *lps_pass = NULL, *lps_agent = NULL;
     MrimPktHeader header;
     guint32 dlen = 0;
 
-    if (!(lps_login = _mrim_pkt_str2lps(login))) {
+    if (!(lps_login = _str2lps(login))) {
         return;
     }
-    if (!(lps_pass = _mrim_pkt_str2lps(pass))) {
+    if (!(lps_pass = _str2lps(pass))) {
         g_free(lps_login);
         return;
     }
     status = GUINT32_TO_LE(status);
-    if (!(lps_agent = _mrim_pkt_str2lps(agent))) {
+    if (!(lps_agent = _str2lps(agent))) {
         g_free(lps_login);
         g_free(lps_pass);
         return;
@@ -82,7 +101,7 @@ mrim_pkt_build_login(MrimData *md, gchar *login, gchar *pass,
     dlen = MRIM_PKT_LPS_LEN(lps_login) + MRIM_PKT_LPS_LEN(lps_pass) +
             sizeof(dlen) + MRIM_PKT_LPS_LEN(lps_agent);
 
-    _mrim_pkt_init_header(&header, 0, MRIM_CS_LOGIN2, dlen);
+    _init_header(&header, ++md->tx_seq, MRIM_CS_LOGIN2, dlen);
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
     purple_circ_buffer_append(md->server.tx_buf, lps_login, MRIM_PKT_LPS_LEN(lps_login));
     purple_circ_buffer_append(md->server.tx_buf, lps_pass, MRIM_PKT_LPS_LEN(lps_pass));
@@ -99,7 +118,7 @@ void
 mrim_pkt_build_ping(MrimData *md)
 {
     MrimPktHeader header;
-    _mrim_pkt_init_header(&header, 0, MRIM_CS_PING, 0);
+    _init_header(&header, ++md->tx_seq, MRIM_CS_PING, 0);
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
 }
 
@@ -134,7 +153,7 @@ _mrim_pkt_collect(MrimData *md)
     pkt = (MrimPktHeader*) md->server.rx_pkt_buf->str;
 
     /* copy whole packet to the linear buffer */
-    while ((need_read = MRIM_PKT_TOTAL_LEN(pkt) - md->server.rx_pkt_buf->len) > 0) {
+    while ((need_read = MRIM_PKT_PKT_LEN(pkt) - md->server.rx_pkt_buf->len) > 0) {
         if (!(available = purple_circ_buffer_get_max_read(md->server.rx_buf))) {
             return NULL;
         }
@@ -155,11 +174,40 @@ _mrim_pkt_collect(MrimData *md)
     return pkt;
 }
 
+static void
+_read_header(MrimPktHeader *pkt, MrimPktHeader *loc, guint32 *pos)
+{
+    loc->magic = GUINT32_FROM_LE(pkt->magic);
+    loc->proto = GUINT32_FROM_LE(pkt->proto);
+    loc->seq = GUINT32_FROM_LE(pkt->seq);
+    loc->msg = GUINT32_FROM_LE(pkt->msg);
+    loc->dlen = GUINT32_FROM_LE(pkt->dlen);
+    memcpy(loc->reserved, pkt->reserved, 16);
+    *pos += sizeof(MrimPktHeader);
+}
+
+static guint32
+_read_ul(MrimPktHeader *pkt, guint32 *pos)
+{
+    guint32 val = *( (guint32*) (((gchar*)pkt) + *pos) );
+    *pos += sizeof(guint32);
+    return val;
+}
+
+static gchar *
+_read_lps(MrimPktHeader *pkt, guint32 *pos)
+{
+    MrimPktLps *lps = (MrimPktLps*) (((gchar*)pkt) + *pos);
+    *pos += MRIM_PKT_LPS_LEN(lps);
+    return _lps2str(lps);
+}
+
 MrimPktHeader *
 mrim_pkt_parse(MrimData *md)
 {
     MrimPktHeader *loc = NULL;
     MrimPktHeader *pkt = NULL;
+    guint32 pos = 0;
 
     if (!(pkt = _mrim_pkt_collect(md))) {
         return NULL;
@@ -167,10 +215,19 @@ mrim_pkt_parse(MrimData *md)
 
     switch (GUINT32_FROM_LE(pkt->msg)) {
         case MRIM_CS_HELLO_ACK:
+            /* twice space will be sufficient for utf8 encoding */
+            loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktHelloAck));
+            _read_header(pkt, loc, &pos);
+            ((MrimPktHelloAck *)loc)->timeout = _read_ul(pkt, &pos);
             break;
         case MRIM_CS_LOGIN_ACK:
+            loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktLoginAck));
+            _read_header(pkt, loc, &pos);
             break;
         case MRIM_CS_LOGIN_REJ:
+            loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktLoginRej));
+            _read_header(pkt, loc, &pos);
+            ((MrimPktLoginRej *)loc)->reason = _read_lps(pkt, &pos);
             break;
         case MRIM_CS_MESSAGE_ACK:
             break;
@@ -181,6 +238,9 @@ mrim_pkt_parse(MrimData *md)
         case MRIM_CS_LOGOUT:
             break;
         case MRIM_CS_CONNECTION_PARAMS:
+            loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktConnectionParam));
+            _read_header(pkt, loc, &pos);
+            ((MrimPktConnectionParam *)loc)->timeout = _read_ul(pkt, &pos);
             break;
         case MRIM_CS_USER_INFO:
             break;
@@ -202,17 +262,7 @@ mrim_pkt_parse(MrimData *md)
             break;
             
     }
-    /* twice space will be sufficient for utf8 encoding */
-    loc = (MrimPktHeader *)g_malloc0(MRIM_PKT_TOTAL_LEN(pkt) * 2);
     
-    loc->magic = GUINT32_FROM_LE(pkt->magic);
-    loc->proto = GUINT32_FROM_LE(pkt->proto);
-    loc->seq = GUINT32_FROM_LE(pkt->seq);
-    loc->msg = GUINT32_FROM_LE(pkt->msg);
-    loc->dlen = GUINT32_FROM_LE(pkt->dlen);
-
-    /* TODO heere */
-
     g_free(pkt);
     return loc;
 }
@@ -241,6 +291,7 @@ mrim_pkt_free(MrimPktHeader *pkt)
             case MRIM_CS_LOGOUT:
                 break;
             case MRIM_CS_CONNECTION_PARAMS:
+                g_free(pkt);
                 break;
             case MRIM_CS_USER_INFO:
                 break;

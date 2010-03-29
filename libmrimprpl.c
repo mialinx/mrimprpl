@@ -51,7 +51,7 @@ static PurplePluginProtocolInfo protocol_info = {
     NULL,                   /* void (*chat_leave)(PurpleConnection *, int id); */
     NULL,                   /* void (*chat_whisper)(PurpleConnection *, int id, const char *who, const char *message); */
     NULL,                   /* int  (*chat_send)(PurpleConnection *, int id, const char *message, PurpleMessageFlags flags); */
-    mrim_keepalive,         /* send keepalive packet to server */
+    NULL,                   /* send keepalive packet to server */
     NULL,                   /* void (*register_user)(PurpleAccount *); */
     NULL,                   /* deprecated: void (*get_cb_info)(PurpleConnection *, int, const char *who); */
     NULL,                   /* deprecated: void (*get_cb_away)(PurpleConnection *, int, const char *who); */

@@ -19,7 +19,7 @@ struct _MrimData
         guint port;
         PurpleProxyConnectData *connect_data;
         gint fd;
-        guint read_ih;
+        guint read_handle;
     } balancer;
 
     struct {
@@ -27,12 +27,16 @@ struct _MrimData
         guint port;
         PurpleProxyConnectData *connect_data;
         gint fd;
-        guint read_ih;
-        guint write_ih;
+        guint read_handle;
+        guint write_handle;
         PurpleCircBuffer *rx_buf;
         GString *rx_pkt_buf; /* linear rx buffer for one packet */
         PurpleCircBuffer *tx_buf;
     } server;
+
+    guint32 keepalive; 
+    guint32 keepalive_handle;
+    guint32 tx_seq;
 };
 
 typedef struct _MrimData MrimData;
@@ -54,7 +58,6 @@ void mrim_set_idle(PurpleConnection *gc, int idletime);
 void mrim_change_passwd(PurpleConnection *gc, const char *old_pass, const char *new_pass);
 void mrim_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group);
 void mrim_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group);
-void mrim_keepalive(PurpleConnection *gc);
 void mrim_group_buddy(PurpleConnection *gc, const char *who, const char *old_group, const char *new_group);
 void mrim_rename_group(PurpleConnection *gc, const char *old_name, PurpleGroup *group, GList *moved_buddies);
 const char * mrim_normalize(const PurpleAccount *account, const char *who);

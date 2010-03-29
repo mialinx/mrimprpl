@@ -13,8 +13,8 @@ void
 mrim_pkt_build_hello(MrimData *md);
 
 void
-mrim_pkt_build_login(MrimData *md, gchar *login, gchar *pass,
-                    guint32 status, gchar *agent);
+mrim_pkt_build_login(MrimData *md, const gchar *login, const gchar *pass,
+                    guint32 status, const gchar *agent);
 
 void
 mrim_pkt_build_ping(MrimData *md);
@@ -33,6 +33,13 @@ typedef struct {
     MrimPktHeader header;
     gchar *reason;
 } MrimPktLoginRej;
+
+/* . . . */
+
+typedef struct {
+    MrimPktHeader header;
+    guint32 timeout;
+} MrimPktConnectionParam;
 
 MrimPktHeader *
 mrim_pkt_parse(MrimData *md);
