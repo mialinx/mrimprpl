@@ -243,6 +243,10 @@ _dispatch_user_info(MrimData *md, MrimPktUserInfo *pkt)
 static void
 _dispatch_logout(MrimData *md, MrimPktLogout *pkt)
 {
+    purple_connection_error_reason(md->account->gc,
+        PURPLE_CONNECTION_ERROR_OTHER_ERROR,
+        "Another host logged in with the same email"
+    );
     purple_account_disconnect(md->account);
 }
 
@@ -251,6 +255,8 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
 {
     MrimPktContactList_Group *group = NULL;
     MrimPktContactList_Contact *contact = NULL;
+    PurpleGroup *pg = NULL;
+    PurpleBuddy *pb = NULL;
     GList *item = NULL;
 
     if (pkt->status != GET_CONTACTS_OK) {
@@ -264,14 +270,29 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     item = g_list_first(pkt->groups);
     while (item) {
         group = (MrimPktContactList_Group*) item->data;
-fprintf(stderr, "GROUP %s 0x%08x\n", group->name, group->flags);
+        if (purple_find_group(group->name)) {
+            pg = purple_group_new(group->name);
+            purple_blist_add_group(pg, NULL);
+        }
         item = g_list_next(item);
     }
 
     item = g_list_first(pkt->contacts);
     while (item) {
         contact = (MrimPktContactList_Contact*) item->data;
-fprintf(stderr, "CONTACT %s (%s) 0x%08x\n", contact->email, contact->nick, contact->group);
+        if (pb = purple_find_buddy(md->account, contact->email)) {
+        }
+        else {
+            pb = purple_buddy_new(md->account, contact->email, contact->nick);
+            /* TODO check flags */
+            if (group = g_list_nth_data(pkt->groups, contact->group)) {
+                pg = purple_find_group(group->name);
+            }
+            else {
+                pg = NULL;
+            }
+            purple_blist_add_buddy(pb, NULL, pg, NULL);
+        }
         item = g_list_next(item);
     }
 
@@ -355,6 +376,9 @@ _canread_cb(gpointer data, gint source, PurpleInputCondition cond)
         while (pkt = mrim_pkt_parse(md)) {
             _dispatch(md, pkt);
             mrim_pkt_free(pkt);
+            if (pkt->msg == MRIM_CS_LOGOUT) {
+                break;
+            }
         }
     }
 }
