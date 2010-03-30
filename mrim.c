@@ -202,7 +202,7 @@ _dispatch_login_rej(MrimData *md, MrimPktLoginRej *pkt)
 }
 
 static void
-_dispatch_connection_param(MrimData *md, MrimPktConnectionParam *pkt)
+_dispatch_connection_param(MrimData *md, MrimPktConnectionParams *pkt)
 {
     md->keepalive = pkt->timeout;
 
@@ -221,9 +221,60 @@ _dispatch_connection_param(MrimData *md, MrimPktConnectionParam *pkt)
 }
 
 static void
+_dispatch_user_info(MrimData *md, MrimPktUserInfo *pkt)
+{
+    const gchar *own_alias = purple_account_get_alias(md->account);
+    const gchar *new_alias = g_hash_table_lookup(pkt->info, "MRIM.NICKNAME");
+    
+    #ifdef ENABLE_MRIM_DEBUG
+    GList *key = g_hash_table_get_keys(pkt->info);
+    while (key) {
+        purple_debug_info("mrim", "User info '%s'='%s'\n", key->data, g_hash_table_lookup(pkt->info, key->data));
+        key = g_list_next(key);
+    }
+    g_list_free(key);
+    #endif
+
+    if ((new_alias && strlen(new_alias)) && !(own_alias && strlen(own_alias))) {
+        purple_account_set_alias(md->account, new_alias);
+    }
+}
+
+static void
 _dispatch_logout(MrimData *md, MrimPktLogout *pkt)
 {
     purple_account_disconnect(md->account);
+}
+
+static void
+_dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
+{
+    MrimPktContactList_Group *group = NULL;
+    MrimPktContactList_Contact *contact = NULL;
+    GList *item = NULL;
+
+    if (pkt->status != GET_CONTACTS_OK) {
+        purple_connection_error_reason(md->account->gc,
+            PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
+            "Failed to load contact list"
+        );
+        return;
+    }
+    
+    item = g_list_first(pkt->groups);
+    while (item) {
+        group = (MrimPktContactList_Group*) item->data;
+fprintf(stderr, "GROUP %s 0x%08x\n", group->name, group->flags);
+        item = g_list_next(item);
+    }
+
+    item = g_list_first(pkt->contacts);
+    while (item) {
+        contact = (MrimPktContactList_Contact*) item->data;
+fprintf(stderr, "CONTACT %s (%s) 0x%08x\n", contact->email, contact->nick, contact->group);
+        item = g_list_next(item);
+    }
+
 }
 
 static void
@@ -253,9 +304,10 @@ _dispatch(MrimData *md, MrimPktHeader *pkt)
             _dispatch_logout(md, (MrimPktLogout*) pkt);
             break;
         case MRIM_CS_CONNECTION_PARAMS:
-            _dispatch_connection_param(md, (MrimPktConnectionParam*) pkt);
+            _dispatch_connection_param(md, (MrimPktConnectionParams*) pkt);
             break;
         case MRIM_CS_USER_INFO:
+            _dispatch_user_info(md, (MrimPktUserInfo*) pkt);
             break;
         case MRIM_CS_ADD_CONTACT_ACK:
             break;
@@ -266,6 +318,11 @@ _dispatch(MrimData *md, MrimPktHeader *pkt)
         case MRIM_CS_AUTHORIZE_ACK:
             break;
         case MRIM_CS_MPOP_SESSION:
+            break;
+        case MRIM_CS_ANKETA_INFO:
+            break;
+        case MRIM_CS_CONTACT_LIST2:
+            _dispatch_contact_list(md, (MrimPktContactList*) pkt);
             break;
         default:
             break;
@@ -281,16 +338,12 @@ _canread_cb(gpointer data, gint source, PurpleInputCondition cond)
     gchar buff[MRIM_ITERM_BUFF_LEN];
     MrimPktHeader *pkt = NULL;
 
-fprintf(stderr, ">>>>>>>>>>\n");
-
     md = (MrimData*) data;
     while ((bytes_read = read(source, buff, MRIM_ITERM_BUFF_LEN)) > 0) {
-fprintf(stderr, "bytes read %d\n", bytes_read);
         purple_circ_buffer_append(md->server.rx_buf, buff, bytes_read);
     }
 
     if (bytes_read == 0 || (bytes_read < 0 && errno != EWOULDBLOCK)) {
-perror("fuck\n");
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
             "Server connection was lost 2"
@@ -300,12 +353,10 @@ perror("fuck\n");
     }
     else {
         while (pkt = mrim_pkt_parse(md)) {
-fprintf(stderr, "!! PARSED %x\n", pkt->msg);
             _dispatch(md, pkt);
             mrim_pkt_free(pkt);
         }
     }
-fprintf(stderr, "<<<<<<<<\n");
 }
 
 
@@ -426,7 +477,7 @@ mrim_login(PurpleAccount *account)
     purple_connection_set_state(md->account->gc, PURPLE_CONNECTING);
 
     #ifdef ENABLE_MRIM_DEBUG
-    purple_debug_info("mrim", "resolving balancer host %s:%u", 
+    purple_debug_info("mrim", "resolving balancer host %s:%u\n", 
                 md->balancer.host, md->balancer.port);
     #endif
 

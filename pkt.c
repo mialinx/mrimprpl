@@ -151,7 +151,7 @@ _collect(MrimData *md)
         }
     }
     pkt = (MrimPktHeader*) md->server.rx_pkt_buf->str;
-/* BUG IS HERE */
+
     /* copy whole packet to the linear buffer */
     while ((need_read = MRIM_PKT_PKT_LEN(pkt) - md->server.rx_pkt_buf->len) > 0) {
         if (!(available = purple_circ_buffer_get_max_read(md->server.rx_buf))) {
@@ -194,6 +194,12 @@ _read_ul(MrimPktHeader *pkt, guint32 *pos)
     return val;
 }
 
+static void
+_skip_ul(MrimPktHeader *pkt, guint32 *pos)
+{
+    *pos += sizeof(guint32);
+}
+
 static gchar *
 _read_lps(MrimPktHeader *pkt, guint32 *pos)
 {
@@ -202,35 +208,252 @@ _read_lps(MrimPktHeader *pkt, guint32 *pos)
     return _lps2str(lps);
 }
 
+static void
+_skip_lps(MrimPktHeader *pkt, guint32 *pos)
+{
+    MrimPktLps *lps = (MrimPktLps*) (((gchar*)pkt) + *pos);
+    *pos += MRIM_PKT_LPS_LEN(lps);
+}
+
+static gchar *
+_read_str(MrimPktHeader *pkt, guint32 *pos)
+{
+    gchar *str = g_strdup(((gchar*)pkt) + *pos);
+    *pos += strlen(str);
+    return str;
+}
+
+static void
+_skip_str(MrimPktHeader *pkt, guint32 *pos)
+{
+    gchar *str = g_strdup(((gchar*)pkt) + *pos);
+    *pos += strlen(str);
+}
+
+static gboolean
+_skip_by_mask(MrimPktHeader *pkt, guint32 *pos, gchar *mask)
+{
+    guint32 i = 0;
+    for (i = 0; i < strlen(mask); i++) {
+        switch (mask[i]) {
+            case 'u':
+                _skip_ul(pkt, pos);
+                break;
+            case 's':
+                _skip_lps(pkt, pos);
+                break;
+            case 'z':
+                _skip_str(pkt, pos);
+                break;
+            default:
+                return FALSE;
+                break;
+        }
+    }
+    return TRUE;
+}
+
+/* particular packets */
+
+static MrimPktHelloAck *
+_parse_hello_ack(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    MrimPktHelloAck *loc = g_new0(MrimPktHelloAck, 1);
+    _read_header(pkt, &loc->header, &pos);
+    loc->timeout = _read_ul(pkt, &pos);
+    return loc;
+}
+
+static void
+_free_hello_ack(MrimPktHelloAck *loc)
+{
+    g_free(loc);
+}
+
+static MrimPktLoginAck *
+_parse_login_ack(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    MrimPktLoginAck *loc = g_new0(MrimPktLoginAck, 1);
+    _read_header(pkt, &loc->header, &pos);
+    return loc;
+}
+
+static void
+_free_login_ack(MrimPktLoginAck *loc)
+{
+    g_free(loc);
+}
+
+static MrimPktLoginRej *
+_parse_login_rej(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    MrimPktLoginRej *loc = g_new0(MrimPktLoginRej, 1);
+    _read_header(pkt, &loc->header, &pos);
+    loc->reason = _read_lps(pkt, &pos);
+    return loc;
+}
+
+static void
+_free_login_rej(MrimPktLoginRej *loc)
+{
+    g_free(loc->reason);
+    g_free(loc);
+}
+
+static MrimPktLogout *
+_parse_logout(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    MrimPktLogout *loc = g_new0(MrimPktLogout, 1);
+    _read_header(pkt, &loc->header, &pos);
+    loc->reason = _read_ul(pkt, &pos);
+    return loc;
+}
+
+static void
+_free_logout(MrimPktLogout *loc)
+{
+    g_free(loc);
+}
+
+static MrimPktConnectionParams *
+_parse_connection_params(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    MrimPktConnectionParams *loc = g_new0(MrimPktConnectionParams, 1);
+    _read_header(pkt, &loc->header, &pos);
+    loc->timeout = _read_ul(pkt, &pos);
+    return loc;
+}
+
+static void
+_free_connection_params(MrimPktConnectionParams *loc)
+{
+    g_free(loc);
+}
+
+static MrimPktUserInfo *
+_parse_user_info(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    gchar *key = NULL, *val = NULL;
+    MrimPktUserInfo *loc = g_new0(MrimPktUserInfo, 1);
+    loc->info = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+    _read_header(pkt, &loc->header, &pos);
+    while (pos < loc->header.dlen) {
+        key = _read_lps(pkt, &pos);
+        val = _read_lps(pkt, &pos);
+        g_hash_table_insert(((MrimPktUserInfo *)loc)->info, key, val);
+    }
+    return loc;
+}
+
+static void
+_free_user_info(MrimPktUserInfo *loc)
+{
+    g_hash_table_destroy(loc->info);
+    g_free(loc);
+}
+
+static MrimPktContactList *
+_parse_contact_list(MrimData *md, MrimPktHeader *pkt)
+{
+    MrimPktContactList *loc = NULL;
+    guint32 pos = 0, groups_count = 0, i = 0, j = 0;
+    gchar *group_mask = NULL, *contact_mask = NULL;
+    MrimPktContactList_Group *group = NULL;
+    MrimPktContactList_Contact *contact = NULL;
+    
+    loc = g_new0(MrimPktContactList, 1);
+    _read_header(pkt, &loc->header, &pos);
+    loc->status = _read_ul(pkt, &pos);
+    groups_count = _read_ul(pkt, &pos);
+    group_mask = _read_lps(pkt, &pos);
+    contact_mask = _read_lps(pkt, &pos);
+
+    for (i = 0; i < groups_count; i++) {
+         group = g_new0(MrimPktContactList_Group, 1);
+         group->flags = _read_ul(pkt, &pos);
+         group->name = _read_lps(pkt, &pos);
+         loc->groups = g_list_append(loc->groups, group);
+         if (!_skip_by_mask(pkt, &pos, group_mask + 2)) {
+            fprintf(stderr, "WARN: wrong pkt content\n");
+         }
+    }
+    loc->groups = g_list_first(loc->groups);
+
+    while (pos < loc->header.dlen) {
+        contact = g_new0(MrimPktContactList_Contact, 1);
+        contact->flags = _read_ul(pkt, &pos);
+        contact->group = _read_ul(pkt, &pos);
+        contact->email = _read_lps(pkt, &pos);
+        contact->nick = _read_lps(pkt, &pos);
+        contact->server_flags = _read_ul(pkt, &pos);
+        contact->status = _read_ul(pkt, &pos);
+        loc->contacts = g_list_append(loc->contacts, contact);
+        if (!_skip_by_mask(pkt, &pos, contact_mask + 6)) {
+            fprintf(stderr, "WARN: wrong pkt content\n");
+        }
+    }
+    loc->contacts = g_list_first(loc->contacts);
+
+    g_free(group_mask);
+    g_free(contact_mask);
+    return loc;
+}
+
+static void
+_free_contact_list(MrimPktContactList *loc)
+{
+    MrimPktContactList_Group *group = NULL;
+    MrimPktContactList_Contact *contact = NULL;
+    GList *node = NULL;
+
+    node = g_list_first(loc->groups);
+    while (node) {
+        group = (MrimPktContactList_Group *) node->data;
+        g_free(group->name);
+        g_free(group);
+        node = g_list_next(node);
+    }
+    g_list_free(loc->groups);
+
+    node = g_list_first(loc->contacts);
+    while (node) {
+        contact = (MrimPktContactList_Contact *) node->data;
+        g_free(contact->email);
+        g_free(contact->nick);
+        g_free(contact);
+        node = g_list_next(node);
+    }
+    g_list_free(loc->contacts);
+    g_free(loc);
+}
+
 MrimPktHeader *
 mrim_pkt_parse(MrimData *md)
 {
-    MrimPktHeader *loc = NULL;
     MrimPktHeader *pkt = NULL;
-    guint32 pos = 0;
-    gchar *tmp = NULL, *tmp2 = NULL;
+    MrimPktHeader *loc = NULL;
 
     if (!(pkt = _collect(md))) {
         return NULL;
     }
 
-fprintf(stderr, "MSG %x\n", GUINT32_FROM_LE(pkt->msg));
+fprintf(stderr, "parsing 0x%08x\n", GUINT32_FROM_LE(pkt->msg));
 
     switch (GUINT32_FROM_LE(pkt->msg)) {
         case MRIM_CS_HELLO_ACK:
-            /* twice space will be sufficient for utf8 encoding */
-            loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktHelloAck));
-            _read_header(pkt, loc, &pos);
-            ((MrimPktHelloAck *)loc)->timeout = _read_ul(pkt, &pos);
+            loc = (MrimPktHeader*) _parse_hello_ack(md, pkt);
             break;
         case MRIM_CS_LOGIN_ACK:
-            loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktLoginAck));
-            _read_header(pkt, loc, &pos);
+            loc = (MrimPktHeader*) _parse_login_ack(md, pkt);
             break;
         case MRIM_CS_LOGIN_REJ:
-            loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktLoginRej));
-            _read_header(pkt, loc, &pos);
-            ((MrimPktLoginRej *)loc)->reason = _read_lps(pkt, &pos);
+            loc = (MrimPktHeader*) _parse_login_rej(md, pkt);
             break;
         case MRIM_CS_MESSAGE_ACK:
             break;
@@ -239,23 +462,13 @@ fprintf(stderr, "MSG %x\n", GUINT32_FROM_LE(pkt->msg));
         case MRIM_CS_USER_STATUS:
             break;
         case MRIM_CS_LOGOUT:
-            loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktLogout));
-            ((MrimPktLogout*)loc)->reason = _read_ul(pkt, &pos);
+            loc = (MrimPktHeader*) _parse_logout(md, pkt);
             break;
         case MRIM_CS_CONNECTION_PARAMS:
-            loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktConnectionParam));
-            _read_header(pkt, loc, &pos);
-            ((MrimPktConnectionParam *)loc)->timeout = _read_ul(pkt, &pos);
+            loc = (MrimPktHeader*) _parse_connection_params(md, pkt);
             break;
         case MRIM_CS_USER_INFO:
-            loc = (MrimPktHeader *) g_malloc0(sizeof(MrimPktUserInfo));
-            ((MrimPktUserInfo *)loc)->info = g_hash_table_new_full(NULL, NULL, g_free, g_free);
-            _read_header(pkt, loc, &pos);
-            while (pos < loc->dlen) {
-                tmp = _read_lps(pkt, &pos);
-                tmp2 = _read_lps(pkt, &pos);
-                g_hash_table_insert(((MrimPktUserInfo *)loc)->info, tmp, tmp2);
-            }
+            loc = (MrimPktHeader*) _parse_user_info(md, pkt);
             break;
         case MRIM_CS_ADD_CONTACT_ACK:
             break;
@@ -267,9 +480,14 @@ fprintf(stderr, "MSG %x\n", GUINT32_FROM_LE(pkt->msg));
             break;
         case MRIM_CS_MPOP_SESSION:
             break;
+        case MRIM_CS_ANKETA_INFO:
+            break;
+        case MRIM_CS_CONTACT_LIST2:
+            loc = (MrimPktHeader*) _parse_contact_list(md, pkt);
+            break;
         default:
             #ifdef ENABLE_MRIM_DEBUG
-            purple_debug_info("mrim", "parsing unsupported type of packet %u\n", 
+            purple_debug_info("mrim", "parsing unsupported type of packet %x\n", 
                 (guint) GUINT32_FROM_LE(pkt->msg));
             #endif
             break;
@@ -281,19 +499,18 @@ fprintf(stderr, "MSG %x\n", GUINT32_FROM_LE(pkt->msg));
 }
 
 void
-mrim_pkt_free(MrimPktHeader *pkt) 
+mrim_pkt_free(MrimPktHeader *loc) 
 {
-    if (pkt) {
-        switch (pkt->msg) {
+    if (loc) {
+        switch (loc->msg) {
             case MRIM_CS_HELLO_ACK:
-                g_free(pkt);
+                _free_hello_ack((MrimPktHelloAck*) loc);
                 break;
             case MRIM_CS_LOGIN_ACK:
-                g_free(pkt);
+                _free_login_ack((MrimPktLoginAck*) loc);
                 break;
             case MRIM_CS_LOGIN_REJ:
-                g_free(((MrimPktLoginRej *)pkt)->reason);
-                g_free(pkt);
+                _free_login_rej((MrimPktLoginRej*) loc);
                 break;
             case MRIM_CS_MESSAGE_ACK:
                 break;
@@ -302,14 +519,13 @@ mrim_pkt_free(MrimPktHeader *pkt)
             case MRIM_CS_USER_STATUS:
                 break;
             case MRIM_CS_LOGOUT:
-                g_free(pkt);
+                _free_logout((MrimPktLogout*) loc);
                 break;
             case MRIM_CS_CONNECTION_PARAMS:
-                g_free(pkt);
+                _free_connection_params((MrimPktConnectionParams*) loc);
                 break;
             case MRIM_CS_USER_INFO:
-                g_hash_table_destroy(((MrimPktUserInfo *)pkt)->info);
-                g_free(pkt);
+                _free_user_info((MrimPktUserInfo*) loc);
                 break;
             case MRIM_CS_ADD_CONTACT_ACK:
                 break;
@@ -321,10 +537,15 @@ mrim_pkt_free(MrimPktHeader *pkt)
                 break;
             case MRIM_CS_MPOP_SESSION:
                 break;
+            case MRIM_CS_ANKETA_INFO:
+                break;
+            case MRIM_CS_CONTACT_LIST2:
+                _free_contact_list((MrimPktContactList*) loc);
+                break;
             default:
                 #ifdef ENABLE_MRIM_DEBUG
                 purple_debug_info("mrim", "freeing unsupported type of packet %u\n", 
-                    (guint) pkt->msg);
+                    (guint) loc->msg);
                 #endif
                 break;
         }

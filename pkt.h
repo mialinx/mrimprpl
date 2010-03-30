@@ -1,3 +1,6 @@
+#ifndef PKT_H
+#define PKT_H
+
 #include <purple.h>
 #include "mrim.h"
 #include "proto.h"
@@ -42,12 +45,35 @@ typedef struct {
 typedef struct {
     MrimPktHeader header;
     guint32 timeout;
-} MrimPktConnectionParam;
+} MrimPktConnectionParams;
 
 typedef struct {
     MrimPktHeader header;
     guint32 reason;
 } MrimPktLogout;
 
+typedef struct {
+    MrimPktHeader header;
+    guint32 status;
+    GList *groups;
+    GList *contacts;
+} MrimPktContactList;
+
+    typedef struct {
+        guint32 flags;
+        gchar *name;
+    } MrimPktContactList_Group;
+
+    typedef struct {
+        guint32 flags;
+        guint32 group;
+        gchar *email;
+        gchar *nick;
+        guint32 server_flags;
+        guint32 status;
+    } MrimPktContactList_Contact;
+
 MrimPktHeader *
 mrim_pkt_parse(MrimData *md);
+
+#endif
