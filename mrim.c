@@ -270,31 +270,37 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     item = g_list_first(pkt->groups);
     while (item) {
         group = (MrimPktContactList_Group*) item->data;
-        if (purple_find_group(group->name)) {
+        if (pg = purple_find_group(group->name)) {
+        }
+        else {
             pg = purple_group_new(group->name);
             purple_blist_add_group(pg, NULL);
         }
+        md->groups = g_list_append(md->groups, pg);
         item = g_list_next(item);
     }
+    md->groups = g_list_first(md->groups);
 
     item = g_list_first(pkt->contacts);
     while (item) {
+        /* TODO here */
         contact = (MrimPktContactList_Contact*) item->data;
+fprintf(stderr, "Adding %s %s\n", contact->email, contact->nick);
         if (pb = purple_find_buddy(md->account, contact->email)) {
+fprintf(stderr, "Found %p %s\n", pb, pb->name);
         }
         else {
+fprintf(stderr, "Not Found\n");
             pb = purple_buddy_new(md->account, contact->email, contact->nick);
-            /* TODO check flags */
-            if (group = g_list_nth_data(pkt->groups, contact->group)) {
-                pg = purple_find_group(group->name);
-            }
-            else {
-                pg = NULL;
-            }
+fprintf(stderr, "Created %p\n", pb);
+            pg = g_list_nth_data(md->groups, contact->group);
+fprintf(stderr, "Group found %p for id %u\n", pg, contact->group);
             purple_blist_add_buddy(pb, NULL, pg, NULL);
         }
+        md->buddies = g_list_append(md->buddies, pb);
         item = g_list_next(item);
     }
+    md->buddies = g_list_first(md->buddies);
 
 }
 
@@ -518,9 +524,12 @@ mrim_login(PurpleAccount *account)
     md->server.tx_buf = purple_circ_buffer_new(MRIM_CIRC_BUFFER_GROW);
     md->server.rx_buf = purple_circ_buffer_new(MRIM_CIRC_BUFFER_GROW);
     md->server.rx_pkt_buf = g_string_sized_new(MRIM_LINR_BUFFER_INIT);
+  
     md->tx_seq = 0;
     md->keepalive = 0;
     md->keepalive_handle =0;
+    md->groups = NULL;
+    md->buddies = NULL;
 }
 
 
@@ -585,7 +594,10 @@ mrim_close(PurpleConnection *gc)
         md->keepalive_handle = 0;
     }
     md->keepalive = 0;
-
+    g_list_free(md->groups);
+    md->groups = NULL;
+    g_list_free(md->buddies);
+    md->buddies = NULL;
     #ifndef ENABLE_MRIM_DEBUG
     purple_debug_info("mrim", "resources freed\n");
     #endif
@@ -692,6 +704,10 @@ mrim_rename_group(PurpleConnection *gc, const char *old_name, PurpleGroup *group
 const char *
 mrim_normalize(const PurpleAccount *account, const char *who)
 {
+    #define MRIM_NORMALIZE_BUF_LEN 1024
+    static gchar buf[MRIM_NORMALIZE_BUF_LEN];
+    /* TODO from here */
+    g_utf8_strdown
 }
 
 /* Removes group from a server */ 

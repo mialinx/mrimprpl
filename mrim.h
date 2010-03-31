@@ -38,6 +38,9 @@ typedef struct {
     guint32 keepalive_handle;
     guint32 tx_seq;
 
+    GList *groups;
+    GList *buddies;
+
 } MrimData;
 
 const char *
