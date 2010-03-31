@@ -41,7 +41,8 @@ mrim_list_emblem(PurpleBuddy *buddy)
 char *
 mrim_status_text(PurpleBuddy *buddy)
 {
-    return "status";
+    /* TODO change */
+    return g_strdup(buddy->name);
 }
 
 /*
@@ -283,18 +284,13 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
 
     item = g_list_first(pkt->contacts);
     while (item) {
-        /* TODO here */
+    /* TODO from here */
         contact = (MrimPktContactList_Contact*) item->data;
-fprintf(stderr, "Adding %s %s\n", contact->email, contact->nick);
         if (pb = purple_find_buddy(md->account, contact->email)) {
-fprintf(stderr, "Found %p %s\n", pb, pb->name);
         }
         else {
-fprintf(stderr, "Not Found\n");
             pb = purple_buddy_new(md->account, contact->email, contact->nick);
-fprintf(stderr, "Created %p\n", pb);
             pg = g_list_nth_data(md->groups, contact->group);
-fprintf(stderr, "Group found %p for id %u\n", pg, contact->group);
             purple_blist_add_buddy(pb, NULL, pg, NULL);
         }
         md->buddies = g_list_append(md->buddies, pb);
@@ -706,8 +702,12 @@ mrim_normalize(const PurpleAccount *account, const char *who)
 {
     #define MRIM_NORMALIZE_BUF_LEN 1024
     static gchar buf[MRIM_NORMALIZE_BUF_LEN];
-    /* TODO from here */
-    g_utf8_strdown
+    char *tmp = g_ascii_strdown(who, -1);
+    strncpy(buf, tmp, MIN(MRIM_NORMALIZE_BUF_LEN, strlen(tmp)));
+    g_free(tmp);
+    buf[MRIM_NORMALIZE_BUF_LEN - 1] = '\0';
+fprintf("Normalize %s\n", buf);
+    return buf;
 }
 
 /* Removes group from a server */ 
