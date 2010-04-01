@@ -258,6 +258,7 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     MrimPktContactList_Contact *contact = NULL;
     PurpleGroup *pg = NULL;
     PurpleBuddy *pb = NULL;
+    PurplePresence *pp = NULL;
     GList *item = NULL;
 
     if (pkt->status != GET_CONTACTS_OK) {
@@ -267,13 +268,12 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
         );
         return;
     }
-    
+  
+    /* ensure groups */
     item = g_list_first(pkt->groups);
     while (item) {
         group = (MrimPktContactList_Group*) item->data;
-        if (pg = purple_find_group(group->name)) {
-        }
-        else {
+        if (!(pg = purple_find_group(group->name))) {
             pg = purple_group_new(group->name);
             purple_blist_add_group(pg, NULL);
         }
@@ -282,22 +282,23 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     }
     md->groups = g_list_first(md->groups);
 
+    /* ensure buddies */
     item = g_list_first(pkt->contacts);
     while (item) {
-    /* TODO from here */
         contact = (MrimPktContactList_Contact*) item->data;
-        if (pb = purple_find_buddy(md->account, contact->email)) {
-        }
-        else {
+        if (!(pb = purple_find_buddy(md->account, contact->email))) {
             pb = purple_buddy_new(md->account, contact->email, contact->nick);
             pg = g_list_nth_data(md->groups, contact->group);
             purple_blist_add_buddy(pb, NULL, pg, NULL);
         }
+        pp = purple_buddy_get_presence(pb);
+        /* TODO from here */
         md->buddies = g_list_append(md->buddies, pb);
         item = g_list_next(item);
     }
     md->buddies = g_list_first(md->buddies);
 
+    /* remove stale buddies */
 }
 
 static void
@@ -703,10 +704,9 @@ mrim_normalize(const PurpleAccount *account, const char *who)
     #define MRIM_NORMALIZE_BUF_LEN 1024
     static gchar buf[MRIM_NORMALIZE_BUF_LEN];
     char *tmp = g_ascii_strdown(who, -1);
-    strncpy(buf, tmp, MIN(MRIM_NORMALIZE_BUF_LEN, strlen(tmp)));
+    g_snprintf(buf, sizeof(buf), "%s", tmp);
     g_free(tmp);
     buf[MRIM_NORMALIZE_BUF_LEN - 1] = '\0';
-fprintf("Normalize %s\n", buf);
     return buf;
 }
 
