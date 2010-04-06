@@ -303,7 +303,18 @@ _free_login_rej(MrimPktLoginRej *loc)
     g_free(loc);
 }
 
-static MrimPktLogout *
+static MrimPktUserStatus*
+_parse_user_status(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    MrimPktUserStatus *loc = g_new0(MrimPktUserStatus, 1);
+    _read_header(pkt, &loc->header, &pos);
+    loc->status = _read_ul(pkt, &pos);
+    loc->email = _read_lps(pkt, &pos);
+    return loc;
+}
+
+static MrimPktLogout*
 _parse_logout(MrimData *md, MrimPktHeader *pkt)
 {
     guint32 pos = 0;
@@ -311,6 +322,13 @@ _parse_logout(MrimData *md, MrimPktHeader *pkt)
     _read_header(pkt, &loc->header, &pos);
     loc->reason = _read_ul(pkt, &pos);
     return loc;
+}
+
+static void
+_free_user_status(MrimPktUserStatus *loc)
+{
+    g_free(loc->email);
+    g_free(loc);
 }
 
 static void
@@ -460,6 +478,7 @@ fprintf(stderr, "parsing 0x%08x\n", GUINT32_FROM_LE(pkt->msg));
         case MRIM_CS_MESSAGE_STATUS:
             break;
         case MRIM_CS_USER_STATUS:
+            loc = (MrimPktHeader*) _parse_user_status(md, pkt);
             break;
         case MRIM_CS_LOGOUT:
             loc = (MrimPktHeader*) _parse_logout(md, pkt);
@@ -517,6 +536,7 @@ mrim_pkt_free(MrimPktHeader *loc)
             case MRIM_CS_MESSAGE_STATUS:
                 break;
             case MRIM_CS_USER_STATUS:
+                _free_user_status((MrimPktUserStatus*) loc);
                 break;
             case MRIM_CS_LOGOUT:
                 _free_logout((MrimPktLogout*) loc);

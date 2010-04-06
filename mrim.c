@@ -21,6 +21,7 @@
 const char *
 mrim_list_icon(PurpleAccount *account, PurpleBuddy *buddy)
 {
+//fprintf(stderr, "mrim_list_icon: %p %p\n", account, buddy);
     return "mrim";
 }
 
@@ -31,6 +32,7 @@ mrim_list_icon(PurpleAccount *account, PurpleBuddy *buddy)
 const char *
 mrim_list_emblem(PurpleBuddy *buddy)
 {
+//fprintf(stderr, "mrim_list_emblem: %p\n", buddy);
     return "emblem";
 }
 
@@ -85,6 +87,32 @@ mrim_status_types (PurpleAccount *account)
     list = g_list_append(list, type);
 
     return list;
+}
+
+static const gchar *
+_status_mrim2purple(guint32 mrim_status)
+{
+    if (mrim_status & STATUS_FLAG_INVISIBLE) {
+        return "invisible";
+    }
+    else {
+        mrim_status &= ~STATUS_FLAG_INVISIBLE;
+    }
+    switch (mrim_status) {
+        case STATUS_ONLINE:
+            return "available";
+            break;
+        case STATUS_OFFLINE:
+            return "offline";
+            break;
+        case STATUS_AWAY:
+            return "away";
+            break;
+        case STATUS_UNDETERMINATED:
+        default:
+            return "unavailable";
+            break;
+    }
 }
 
 /*
@@ -242,6 +270,13 @@ _dispatch_user_info(MrimData *md, MrimPktUserInfo *pkt)
 }
 
 static void
+_dispatch_user_status(MrimData *md, MrimPktUserStatus *pkt)
+{
+    purple_prpl_got_user_status(md->account, pkt->email, 
+                        _status_mrim2purple(pkt->status), NULL);
+}
+
+static void
 _dispatch_logout(MrimData *md, MrimPktLogout *pkt)
 {
     purple_connection_error_reason(md->account->gc,
@@ -249,6 +284,12 @@ _dispatch_logout(MrimData *md, MrimPktLogout *pkt)
         "Another host logged in with the same email"
     );
     purple_account_disconnect(md->account);
+}
+
+static void
+__hash_dump_p(gpointer key, gpointer val, gpointer dat)
+{
+    fprintf(stderr, "%s: '%s' => %p\n", dat, key, val);
 }
 
 static void
@@ -284,7 +325,6 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
 
     item = g_list_first(pkt->contacts);
     while (item) {
-    /* TODO from here */
         contact = (MrimPktContactList_Contact*) item->data;
         if (pb = purple_find_buddy(md->account, contact->email)) {
         }
@@ -293,6 +333,8 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
             pg = g_list_nth_data(md->groups, contact->group);
             purple_blist_add_buddy(pb, NULL, pg, NULL);
         }
+        purple_prpl_got_user_status(md->account, contact->email, 
+                                _status_mrim2purple(contact->status), NULL);
         md->buddies = g_list_append(md->buddies, pb);
         item = g_list_next(item);
     }
@@ -322,6 +364,7 @@ _dispatch(MrimData *md, MrimPktHeader *pkt)
         case MRIM_CS_MESSAGE_STATUS:
             break;
         case MRIM_CS_USER_STATUS:
+            _dispatch_user_status(md, (MrimPktUserStatus*) pkt);
             break;
         case MRIM_CS_LOGOUT:
             _dispatch_logout(md, (MrimPktLogout*) pkt);
@@ -703,10 +746,9 @@ mrim_normalize(const PurpleAccount *account, const char *who)
     #define MRIM_NORMALIZE_BUF_LEN 1024
     static gchar buf[MRIM_NORMALIZE_BUF_LEN];
     char *tmp = g_ascii_strdown(who, -1);
-    strncpy(buf, tmp, MIN(MRIM_NORMALIZE_BUF_LEN, strlen(tmp)));
+    snprintf(buf, MRIM_NORMALIZE_BUF_LEN, "%s", tmp);
     g_free(tmp);
     buf[MRIM_NORMALIZE_BUF_LEN - 1] = '\0';
-fprintf("Normalize %s\n", buf);
     return buf;
 }
 

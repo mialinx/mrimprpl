@@ -73,6 +73,12 @@ typedef struct {
         guint32 status;
     } MrimPktContactList_Contact;
 
+typedef struct {
+    MrimPktHeader header;
+    guint32 status;
+    gchar *email;
+} MrimPktUserStatus;
+
 MrimPktHeader *
 mrim_pkt_parse(MrimData *md);
 
