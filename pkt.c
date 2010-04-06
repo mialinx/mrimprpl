@@ -122,6 +122,15 @@ mrim_pkt_build_ping(MrimData *md)
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
 }
 
+void
+mrim_pkt_build_change_status(MrimData *md, guint32 status)
+{
+    MrimPktHeader header;
+    status = GUINT32_TO_LE(status);
+    _init_header(&header, ++md->tx_seq, MRIM_CS_CHANGE_STATUS, sizeof(status));
+    purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
+    purple_circ_buffer_append(md->server.tx_buf, &status, sizeof(status));
+}
 
 /* Server to Client messages */
 

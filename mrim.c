@@ -74,8 +74,8 @@ mrim_status_types (PurpleAccount *account)
             TRUE, TRUE, FALSE);
     list = g_list_append(list, type);
 
-    type = purple_status_type_new_full(PURPLE_STATUS_UNAVAILABLE, NULL, NULL, 
-            TRUE, TRUE, FALSE);
+    type = purple_status_type_new_full(PURPLE_STATUS_UNSET, NULL, NULL, 
+            FALSE, TRUE, FALSE);
     list = g_list_append(list, type);
 
     type = purple_status_type_new_full(PURPLE_STATUS_INVISIBLE, NULL, NULL, 
@@ -89,28 +89,54 @@ mrim_status_types (PurpleAccount *account)
     return list;
 }
 
+static guint32
+_status_purple2mrim(PurpleStatus *status)
+{
+    guint32 mrim_status = 0;
+    PurpleStatusType *type = purple_status_get_type(status);
+    switch (purple_status_type_get_primitive(type)) {
+        case PURPLE_STATUS_AVAILABLE:
+            return STATUS_ONLINE;
+            break;
+        case PURPLE_STATUS_AWAY:
+            return STATUS_AWAY;
+            break;
+        case PURPLE_STATUS_INVISIBLE:
+            return STATUS_ONLINE & STATUS_FLAG_INVISIBLE;
+            break;
+        default:
+            if (purple_status_is_online(status)) {
+                return STATUS_ONLINE;
+            }
+            else {
+                return STATUS_OFFLINE;
+            }
+            break;
+    }
+}
+
 static const gchar *
 _status_mrim2purple(guint32 mrim_status)
 {
     if (mrim_status & STATUS_FLAG_INVISIBLE) {
-        return "invisible";
+        return purple_primitive_get_id_from_type(PURPLE_STATUS_INVISIBLE);
     }
     else {
         mrim_status &= ~STATUS_FLAG_INVISIBLE;
     }
     switch (mrim_status) {
         case STATUS_ONLINE:
-            return "available";
+            return purple_primitive_get_id_from_type(PURPLE_STATUS_AVAILABLE);
             break;
         case STATUS_OFFLINE:
-            return "offline";
+            return purple_primitive_get_id_from_type(PURPLE_STATUS_OFFLINE);
             break;
         case STATUS_AWAY:
-            return "away";
+            return purple_primitive_get_id_from_type(PURPLE_STATUS_AWAY);
             break;
         case STATUS_UNDETERMINATED:
         default:
-            return "unavailable";
+            return purple_primitive_get_id_from_type(PURPLE_STATUS_UNSET);
             break;
     }
 }
@@ -482,6 +508,8 @@ _mrim_login_balancer_answered(gpointer data, gint source, PurpleInputCondition c
     g_free(buff);
     purple_input_remove(md->balancer.read_handle);
     md->balancer.read_handle = 0;
+    close(md->balancer.fd);
+    md->balancer.fd = 0;
 
     #ifdef ENABLE_MRIM_DEBUG
     purple_debug_info("mrim", "connecting to server: %s:%u\n", md->server.host, 
@@ -588,10 +616,13 @@ mrim_close(PurpleConnection *gc)
         purple_proxy_connect_cancel(md->balancer.connect_data);
         md->balancer.connect_data = NULL;
     }
-    md->balancer.fd = 0; /* is ther any need to close connections ? */
     if (md->balancer.read_handle) {
         purple_input_remove(md->balancer.read_handle);
         md->balancer.read_handle = 0;
+    }
+    if (md->balancer.fd) {
+        close(md->balancer.fd);
+        md->balancer.fd = 0;
     }
         
     /* Free server structures */
@@ -604,7 +635,6 @@ mrim_close(PurpleConnection *gc)
         purple_proxy_connect_cancel(md->server.connect_data);
         md->server.connect_data = NULL;
     }
-    md->server.fd = 0; /* is ther any need to close connections ? */
     if (md->server.read_handle) {
         purple_input_remove(md->server.read_handle);
         md->server.read_handle = 0;
@@ -613,6 +643,12 @@ mrim_close(PurpleConnection *gc)
         purple_input_remove(md->server.write_handle);
         md->server.write_handle = 0;
     }
+    if (md->server.fd) {
+        close(md->server.fd);
+        md->server.fd = 0;
+    }
+
+    /* Free buffers */
     if (md->server.rx_buf) {
         purple_circ_buffer_destroy(md->server.rx_buf);
         md->server.rx_buf = NULL;
@@ -688,6 +724,15 @@ mrim_get_info(PurpleConnection *gc, const char *who)
 void 
 mrim_set_status(PurpleAccount *account, PurpleStatus *status)
 {
+    MrimData *md = (MrimData*) account->gc->proto_data;
+    guint32 mrim_status = _status_purple2mrim(status);
+    if (mrim_status != STATUS_UNDETERMINATED && mrim_status != STATUS_OFFLINE) {
+        mrim_pkt_build_change_status(md, mrim_status);
+        _send_out(md);
+    }
+    else {
+        fprintf(stderr, "Unexpected status %s\n", purple_status_get_id(status));
+    }
 }
 
 /* set idle time */
