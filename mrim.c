@@ -75,7 +75,7 @@ mrim_status_types (PurpleAccount *account)
     list = g_list_append(list, type);
 
     type = purple_status_type_new_full(PURPLE_STATUS_UNSET, NULL, NULL, 
-            FALSE, TRUE, FALSE);
+            TRUE, FALSE, FALSE);
     list = g_list_append(list, type);
 
     type = purple_status_type_new_full(PURPLE_STATUS_INVISIBLE, NULL, NULL, 
@@ -366,6 +366,8 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     md->buddies = g_list_first(md->buddies);
 
     /* remove stale buddies */
+    item = purple_find_buddies(md->account, NULL);
+    /* TODO */
 }
 
 static void
