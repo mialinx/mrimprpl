@@ -132,6 +132,43 @@ mrim_pkt_build_change_status(MrimData *md, guint32 status)
     purple_circ_buffer_append(md->server.tx_buf, &status, sizeof(status));
 }
 
+void
+mrim_pkt_build_add_contact(MrimData *md, guint32 flags, guint32 group, 
+                    const gchar *email, const gchar *name)
+{
+    MrimPktHeader header;
+    MrimPktLps *lps_email = NULL, *lps_name = NULL;
+    gboolean is_user = flags & CONTACT_FLAG_GROUP;
+
+    flags = GUINT32_TO_LE(flags);
+    group = GUINT32_TO_LE(group);
+    if (!(lps_email = _str2lps(email))) {
+        return;
+    }
+    if (is_user) {
+        if (!(lps_name = _str2lps(name))) {
+            g_free(lps_email);
+            return;
+        }
+    }
+    _init_header(&header, ++md->tx_seq, MRIM_CS_ADD_CONTACT, 
+        2 * sizeof(guint32) + MRIM_PKT_LPS_LEN(lps_email) 
+        + is_user ? MRIM_PKT_LPS_LEN(lps_name) : 0);
+
+    purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
+    purple_circ_buffer_append(md->server.tx_buf, &flags, sizeof(flags));
+    purple_circ_buffer_append(md->server.tx_buf, &group, sizeof(group));
+    purple_circ_buffer_append(md->server.tx_buf, lps_email, MRIM_PKT_LPS_LEN(lps_email));
+    if (is_user) {
+        purple_circ_buffer_append(md->server.tx_buf, lps_name, MRIM_PKT_LPS_LEN(lps_name));
+    }
+
+    g_free(lps_email);
+    if (is_user) {
+        g_free(lps_name);
+    }
+}
+
 /* Server to Client messages */
 
 /* Collect bytes in rx_pkt_buf for just one packet 
@@ -460,6 +497,23 @@ _free_contact_list(MrimPktContactList *loc)
     g_free(loc);
 }
 
+static MrimPktAddContactAck *
+_parse_add_contact_ack(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    MrimPktAddContactAck *loc = g_new0(MrimPktAddContactAck, 1);
+    _read_header(pkt, &loc->header, &pos);
+    loc->status = _read_ul(pkt, &pos);
+    loc->contact_id = _read_ul(pkt, &pos);
+    return loc;
+}
+
+static void
+_free_add_contact_ack(MrimPktAddContactAck *loc)
+{
+    g_free(loc);
+}
+
 MrimPktHeader *
 mrim_pkt_parse(MrimData *md)
 {
@@ -499,6 +553,7 @@ fprintf(stderr, "parsing 0x%08x\n", GUINT32_FROM_LE(pkt->msg));
             loc = (MrimPktHeader*) _parse_user_info(md, pkt);
             break;
         case MRIM_CS_ADD_CONTACT_ACK:
+            loc = (MrimPktHeader*) _parse_add_contact_ack(md, pkt);
             break;
         case MRIM_CS_MODIFY_CONTACT_ACK:
             break;
@@ -557,6 +612,7 @@ mrim_pkt_free(MrimPktHeader *loc)
                 _free_user_info((MrimPktUserInfo*) loc);
                 break;
             case MRIM_CS_ADD_CONTACT_ACK:
+                _free_add_contact_ack((MrimPktAddContactAck*) loc);
                 break;
             case MRIM_CS_MODIFY_CONTACT_ACK:
                 break;

@@ -75,7 +75,7 @@ mrim_status_types (PurpleAccount *account)
     list = g_list_append(list, type);
 
     type = purple_status_type_new_full(PURPLE_STATUS_UNSET, NULL, NULL, 
-            TRUE, FALSE, FALSE);
+            TRUE, TRUE, FALSE);
     list = g_list_append(list, type);
 
     type = purple_status_type_new_full(PURPLE_STATUS_INVISIBLE, NULL, NULL, 
@@ -366,8 +366,15 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     md->buddies = g_list_first(md->buddies);
 
     /* remove stale buddies */
-    item = purple_find_buddies(md->account, NULL);
-    /* TODO */
+    GSList *buddies = NULL, *sitem = NULL;
+    buddies = sitem = purple_find_buddies(md->account, NULL);
+    while (sitem) {
+        if (!g_list_find(md->buddies, sitem->data)) {
+            purple_blist_remove_buddy((PurpleBuddy*) sitem->data);
+        }
+        sitem = g_slist_next(sitem);
+    }
+    g_slist_free(buddies);
 }
 
 static void

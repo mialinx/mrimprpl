@@ -25,6 +25,10 @@ mrim_pkt_build_ping(MrimData *md);
 void
 mrim_pkt_build_change_status(MrimData *md, guint32 status);
 
+void
+mrim_pkt_build_add_contact(MrimData *md, guint32 flags, guint32 group, 
+                    const gchar *email, const gchar *name);
+                    
 /* Server to Client messages */
 typedef struct {
     MrimPktHeader header;
@@ -81,6 +85,12 @@ typedef struct {
     guint32 status;
     gchar *email;
 } MrimPktUserStatus;
+
+typedef struct {
+    MrimPktHeader header;
+    guint32 status;
+    guint32 contact_id;
+} MrimPktAddContactAck;
 
 MrimPktHeader *
 mrim_pkt_parse(MrimData *md);
