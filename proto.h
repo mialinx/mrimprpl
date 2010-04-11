@@ -8,7 +8,7 @@
 #include <sys/types.h>
 
 #define PROTO_VERSION_MAJOR     1
-#define PROTO_VERSION_MINOR     9
+#define PROTO_VERSION_MINOR     8
 #define PROTO_VERSION ((((u_long)(PROTO_VERSION_MAJOR))<<16)|(u_long)(PROTO_VERSION_MINOR))
 
 

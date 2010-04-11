@@ -4,8 +4,8 @@
 
 /* Common utils */
 
-#define MRIM_PKT_PKT_LEN(pkt) (GUINT32_FROM_LE(pkt->dlen) + sizeof(MrimPktHeader))
-#define MRIM_PKT_LPS_LEN(lps) (GUINT32_FROM_LE((lps)->length) + sizeof((lps)->length))
+#define PKT_LEN(pkt) (GUINT32_FROM_LE(pkt->dlen) + sizeof(MrimPktHeader))
+#define LPS_LEN(lps) (GUINT32_FROM_LE((lps)->length) + sizeof((lps)->length))
 
 typedef struct {
     guint32 length;
@@ -98,15 +98,15 @@ mrim_pkt_build_login(MrimData *md, const gchar *login, const gchar *pass,
         return;
     }
 
-    dlen = MRIM_PKT_LPS_LEN(lps_login) + MRIM_PKT_LPS_LEN(lps_pass) +
-            sizeof(dlen) + MRIM_PKT_LPS_LEN(lps_agent);
+    dlen = LPS_LEN(lps_login) + LPS_LEN(lps_pass) +
+            sizeof(dlen) + LPS_LEN(lps_agent);
 
     _init_header(&header, ++md->tx_seq, MRIM_CS_LOGIN2, dlen);
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
-    purple_circ_buffer_append(md->server.tx_buf, lps_login, MRIM_PKT_LPS_LEN(lps_login));
-    purple_circ_buffer_append(md->server.tx_buf, lps_pass, MRIM_PKT_LPS_LEN(lps_pass));
+    purple_circ_buffer_append(md->server.tx_buf, lps_login, LPS_LEN(lps_login));
+    purple_circ_buffer_append(md->server.tx_buf, lps_pass, LPS_LEN(lps_pass));
     purple_circ_buffer_append(md->server.tx_buf, &status, sizeof(status));
-    purple_circ_buffer_append(md->server.tx_buf, lps_agent, MRIM_PKT_LPS_LEN(lps_agent));
+    purple_circ_buffer_append(md->server.tx_buf, lps_agent, LPS_LEN(lps_agent));
     g_free(lps_login);
     g_free(lps_pass);
     g_free(lps_agent);
@@ -133,40 +133,79 @@ mrim_pkt_build_change_status(MrimData *md, guint32 status)
 }
 
 void
-mrim_pkt_build_add_contact(MrimData *md, guint32 flags, guint32 group, 
+mrim_pkt_build_add_contact(MrimData *md, guint32 flags, guint32 group_id, 
                     const gchar *email, const gchar *name)
 {
     MrimPktHeader header;
-    MrimPktLps *lps_email = NULL, *lps_name = NULL;
-    gboolean is_user = flags & CONTACT_FLAG_GROUP;
+    MrimPktLps *lps_email = NULL, *lps_name = NULL, *lps_unused = NULL;
 
     flags = GUINT32_TO_LE(flags);
-    group = GUINT32_TO_LE(group);
+    group_id = GUINT32_TO_LE(group_id);
     if (!(lps_email = _str2lps(email))) {
         return;
     }
-    if (is_user) {
-        if (!(lps_name = _str2lps(name))) {
-            g_free(lps_email);
-            return;
-        }
+    if (!(lps_name = _str2lps(name))) {
+        g_free(lps_email);
+        return;
+    }
+    if (!(lps_unused = _str2lps(" "))) {
+        g_free(lps_name);
+        g_free(lps_email);
+        return;
     }
     _init_header(&header, ++md->tx_seq, MRIM_CS_ADD_CONTACT, 
-        2 * sizeof(guint32) + MRIM_PKT_LPS_LEN(lps_email) 
-        + is_user ? MRIM_PKT_LPS_LEN(lps_name) : 0);
+        2 * sizeof(guint32) + LPS_LEN(lps_email) 
+        + LPS_LEN(lps_name) + LPS_LEN(lps_unused));
 
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
     purple_circ_buffer_append(md->server.tx_buf, &flags, sizeof(flags));
-    purple_circ_buffer_append(md->server.tx_buf, &group, sizeof(group));
-    purple_circ_buffer_append(md->server.tx_buf, lps_email, MRIM_PKT_LPS_LEN(lps_email));
-    if (is_user) {
-        purple_circ_buffer_append(md->server.tx_buf, lps_name, MRIM_PKT_LPS_LEN(lps_name));
-    }
+    purple_circ_buffer_append(md->server.tx_buf, &group_id, sizeof(group_id));
+    purple_circ_buffer_append(md->server.tx_buf, lps_email, LPS_LEN(lps_email));
+    purple_circ_buffer_append(md->server.tx_buf, lps_name, LPS_LEN(lps_name));
+    purple_circ_buffer_append(md->server.tx_buf, lps_unused, LPS_LEN(lps_unused));
 
     g_free(lps_email);
-    if (is_user) {
-        g_free(lps_name);
+    g_free(lps_name);
+    g_free(lps_unused);
+}
+
+void
+mrim_pkt_build_modify_contact(MrimData *md, guint32 id, guint32 flags, guint32 group_id, 
+                    const gchar *email, const gchar *name)
+{
+    MrimPktHeader header;
+    MrimPktLps *lps_email = NULL, *lps_name = NULL, *lps_unused = NULL;
+
+    id = GUINT32_TO_LE(id);
+    flags = GUINT32_TO_LE(flags);
+    group_id = GUINT32_TO_LE(group_id);
+    if (!(lps_email = _str2lps(email))) {
+        return;
     }
+    if (!(lps_name = _str2lps(name))) {
+        g_free(lps_email);
+        return;
+    }
+    if (!(lps_unused = _str2lps(" "))) {
+        g_free(lps_name);
+        g_free(lps_email);
+        return;
+    }
+    _init_header(&header, ++md->tx_seq, MRIM_CS_MODIFY_CONTACT, 
+        3 * sizeof(guint32) + LPS_LEN(lps_email) 
+        + LPS_LEN(lps_name) + LPS_LEN(lps_unused));
+
+    purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
+    purple_circ_buffer_append(md->server.tx_buf, &id, sizeof(id));
+    purple_circ_buffer_append(md->server.tx_buf, &flags, sizeof(flags));
+    purple_circ_buffer_append(md->server.tx_buf, &group_id, sizeof(group_id));
+    purple_circ_buffer_append(md->server.tx_buf, lps_email, LPS_LEN(lps_email));
+    purple_circ_buffer_append(md->server.tx_buf, lps_name, LPS_LEN(lps_name));
+    purple_circ_buffer_append(md->server.tx_buf, lps_unused, LPS_LEN(lps_unused));
+
+    g_free(lps_email);
+    g_free(lps_name);
+    g_free(lps_unused);
 }
 
 /* Server to Client messages */
@@ -199,7 +238,7 @@ _collect(MrimData *md)
     pkt = (MrimPktHeader*) md->server.rx_pkt_buf->str;
 
     /* copy whole packet to the linear buffer */
-    while ((need_read = MRIM_PKT_PKT_LEN(pkt) - md->server.rx_pkt_buf->len) > 0) {
+    while ((need_read = PKT_LEN(pkt) - md->server.rx_pkt_buf->len) > 0) {
         if (!(available = purple_circ_buffer_get_max_read(md->server.rx_buf))) {
             return NULL;
         }
@@ -250,7 +289,7 @@ static gchar *
 _read_lps(MrimPktHeader *pkt, guint32 *pos)
 {
     MrimPktLps *lps = (MrimPktLps*) (((gchar*)pkt) + *pos);
-    *pos += MRIM_PKT_LPS_LEN(lps);
+    *pos += LPS_LEN(lps);
     return _lps2str(lps);
 }
 
@@ -258,7 +297,7 @@ static void
 _skip_lps(MrimPktHeader *pkt, guint32 *pos)
 {
     MrimPktLps *lps = (MrimPktLps*) (((gchar*)pkt) + *pos);
-    *pos += MRIM_PKT_LPS_LEN(lps);
+    *pos += LPS_LEN(lps);
 }
 
 static gchar *
@@ -428,8 +467,8 @@ _parse_contact_list(MrimData *md, MrimPktHeader *pkt)
     MrimPktContactList *loc = NULL;
     guint32 pos = 0, groups_count = 0, i = 0, j = 0;
     gchar *group_mask = NULL, *contact_mask = NULL;
-    MrimPktContactList_Group *group = NULL;
-    MrimPktContactList_Contact *contact = NULL;
+    MrimGroup *group = NULL;
+    MrimContact *contact = NULL;
     
     loc = g_new0(MrimPktContactList, 1);
     _read_header(pkt, &loc->header, &pos);
@@ -439,7 +478,7 @@ _parse_contact_list(MrimData *md, MrimPktHeader *pkt)
     contact_mask = _read_lps(pkt, &pos);
 
     for (i = 0; i < groups_count; i++) {
-         group = g_new0(MrimPktContactList_Group, 1);
+         group = g_new0(MrimGroup, 1);
          group->flags = _read_ul(pkt, &pos);
          group->name = _read_lps(pkt, &pos);
          loc->groups = g_list_append(loc->groups, group);
@@ -450,9 +489,9 @@ _parse_contact_list(MrimData *md, MrimPktHeader *pkt)
     loc->groups = g_list_first(loc->groups);
 
     while (pos < loc->header.dlen) {
-        contact = g_new0(MrimPktContactList_Contact, 1);
+        contact = g_new0(MrimContact, 1);
         contact->flags = _read_ul(pkt, &pos);
-        contact->group = _read_ul(pkt, &pos);
+        contact->group_id = _read_ul(pkt, &pos);
         contact->email = _read_lps(pkt, &pos);
         contact->nick = _read_lps(pkt, &pos);
         contact->server_flags = _read_ul(pkt, &pos);
@@ -472,13 +511,13 @@ _parse_contact_list(MrimData *md, MrimPktHeader *pkt)
 static void
 _free_contact_list(MrimPktContactList *loc)
 {
-    MrimPktContactList_Group *group = NULL;
-    MrimPktContactList_Contact *contact = NULL;
+    MrimGroup *group = NULL;
+    MrimContact *contact = NULL;
     GList *node = NULL;
 
     node = g_list_first(loc->groups);
     while (node) {
-        group = (MrimPktContactList_Group *) node->data;
+        group = (MrimGroup *) node->data;
         g_free(group->name);
         g_free(group);
         node = g_list_next(node);
@@ -487,7 +526,7 @@ _free_contact_list(MrimPktContactList *loc)
 
     node = g_list_first(loc->contacts);
     while (node) {
-        contact = (MrimPktContactList_Contact *) node->data;
+        contact = (MrimContact *) node->data;
         g_free(contact->email);
         g_free(contact->nick);
         g_free(contact);
@@ -508,8 +547,24 @@ _parse_add_contact_ack(MrimData *md, MrimPktHeader *pkt)
     return loc;
 }
 
+static MrimPktModifyContactAck *
+_parse_modify_contact_ack(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    MrimPktModifyContactAck *loc = g_new0(MrimPktModifyContactAck, 1);
+    _read_header(pkt, &loc->header, &pos);
+    loc->status = _read_ul(pkt, &pos);
+    return loc;
+}
+
 static void
 _free_add_contact_ack(MrimPktAddContactAck *loc)
+{
+    g_free(loc);
+}
+
+static void
+_free_modify_contact_ack(MrimPktModifyContactAck *loc)
 {
     g_free(loc);
 }
@@ -556,6 +611,7 @@ fprintf(stderr, "parsing 0x%08x\n", GUINT32_FROM_LE(pkt->msg));
             loc = (MrimPktHeader*) _parse_add_contact_ack(md, pkt);
             break;
         case MRIM_CS_MODIFY_CONTACT_ACK:
+            loc = (MrimPktHeader*) _parse_modify_contact_ack(md, pkt);
             break;
         case MRIM_CS_OFFLINE_MESSAGE_ACK:
             break;
@@ -615,6 +671,7 @@ mrim_pkt_free(MrimPktHeader *loc)
                 _free_add_contact_ack((MrimPktAddContactAck*) loc);
                 break;
             case MRIM_CS_MODIFY_CONTACT_ACK:
+                _free_modify_contact_ack((MrimPktModifyContactAck*) loc);
                 break;
             case MRIM_CS_OFFLINE_MESSAGE_ACK:
                 break;

@@ -34,7 +34,7 @@ static PurplePluginProtocolInfo protocol_info = {
     mrim_get_info,          /* retriev user info */
     mrim_set_status,        /* set status */
     mrim_set_idle,          /* set idle time */
-    mrim_change_passwd,     /* change account passwd */
+    NULL,                   /* change account passwd */
     mrim_add_buddy,         /* add one buddy to a contact list */
     NULL,                   /* void (*add_buddies)(PurpleConnection *, GList *buddies, GList *groups); */
     mrim_remove_buddy,      /* remove one buddy from a contact list */
@@ -55,7 +55,7 @@ static PurplePluginProtocolInfo protocol_info = {
     NULL,                   /* void (*register_user)(PurpleAccount *); */
     NULL,                   /* deprecated: void (*get_cb_info)(PurpleConnection *, int, const char *who); */
     NULL,                   /* deprecated: void (*get_cb_away)(PurpleConnection *, int, const char *who); */
-    NULL,                   /* void (*alias_buddy)(PurpleConnection *, const char *who, const char *alias); */
+    mrim_alias_buddy,       /* void (*alias_buddy)(PurpleConnection *, const char *who, const char *alias); */
     mrim_group_buddy,       /* change a buddy's group on a server list/roster */
     mrim_rename_group,      /* rename a group on a server list/roster */
     NULL,                   /* void (*buddy_free)(PurpleBuddy *); */

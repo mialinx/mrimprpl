@@ -7,8 +7,78 @@
 #include "mrim.h"
 #include "pkt.h"
 
+#define MAX_GROUP 20
 #define MRIM_CIRC_BUFFER_GROW (16 * 1024)
 #define MRIM_LINR_BUFFER_INIT (1024)
+
+typedef struct {
+    #define ATTEMPT_ADD_BUDDY   1
+    #define ATTEMPT_REM_BUDDY   2
+    #define ATTEMPT_MOD_BUDDY   3
+    #define ATTEMPT_ADD_GROUP   4
+    #define ATTEMPT_REM_GROUP   5
+    #define ATTEMPT_MOD_GROUP   6
+    #define ATTEMPT_MSG         7
+    guint32 type;
+    union {
+        PurpleGroup *group;
+        PurpleBuddy *buddy;
+        struct {
+            gchar *name;
+            gchar *message;
+            PurpleMessageFlags flags;
+        } msg;
+    };
+} MrimAttempt;
+
+static MrimAttempt *
+_attemp_new_for_group(PurpleGroup *group, guint32 type)
+{
+    MrimAttempt *atmp = g_new0(MrimAttempt, 1);
+    atmp->type = type;
+    atmp->group = group;
+    return atmp;
+}
+
+static MrimAttempt *
+_attemp_new_for_buddy(PurpleBuddy *buddy, guint32 type)
+{
+    MrimAttempt *atmp = g_new0(MrimAttempt, 1);
+    atmp->type = type;
+    atmp->buddy = buddy;
+    return atmp;
+}
+
+static MrimAttempt *
+_attemp_new_for_msg(gchar *name, gchar *message, PurpleMessageFlags flags)
+{
+    MrimAttempt *atmp = g_new0(MrimAttempt, 1);
+    atmp->type = ATTEMPT_MSG;
+    atmp->msg.name = name;
+    atmp->msg.message = message;
+    atmp->msg.flags = flags;
+    return atmp;
+}
+
+static gint32
+_get_contact_id(MrimData *md, PurpleBuddy *buddy)
+{
+    gint32 id = g_list_index(md->buddies, buddy);
+    if (id < 0) {
+        return -1;
+    }
+    else {
+        return MAX_GROUP + id;
+    }
+}
+
+static gint32
+_get_group_id(MrimData *md, PurpleGroup *group)
+{
+    return g_list_index(md->groups, group);
+}
+
+/* =========================================== */
 
 /*
  * Returns the base icon name for the given buddy and account.
@@ -21,7 +91,6 @@
 const char *
 mrim_list_icon(PurpleAccount *account, PurpleBuddy *buddy)
 {
-//fprintf(stderr, "mrim_list_icon: %p %p\n", account, buddy);
     return "mrim";
 }
 
@@ -32,7 +101,6 @@ mrim_list_icon(PurpleAccount *account, PurpleBuddy *buddy)
 const char *
 mrim_list_emblem(PurpleBuddy *buddy)
 {
-//fprintf(stderr, "mrim_list_emblem: %p\n", buddy);
     return "emblem";
 }
 
@@ -71,10 +139,6 @@ mrim_status_types (PurpleAccount *account)
     list = g_list_append(list, type);
 
     type = purple_status_type_new_full(PURPLE_STATUS_AWAY, NULL, NULL, 
-            TRUE, TRUE, FALSE);
-    list = g_list_append(list, type);
-
-    type = purple_status_type_new_full(PURPLE_STATUS_UNSET, NULL, NULL, 
             TRUE, TRUE, FALSE);
     list = g_list_append(list, type);
 
@@ -169,7 +233,7 @@ _canwrite_cb(gpointer data, gint source, PurpleInputCondition cond)
         else {
             purple_connection_error_reason(md->account->gc,
                 PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-                "Server connection was lost 1"
+                "Server connection was lost"
             );
         }
     }
@@ -198,14 +262,10 @@ static gboolean
 _mrim_ping(gpointer data)
 {
     MrimData *md = (MrimData *) data;
- 
+
     mrim_pkt_build_ping(md);
     _send_out(md);
-    
-    #ifdef ENABLE_MRIM_DEBUG
-    purple_debug_info("mrim", "ping sent with seq = %u\n", md->tx_seq);
-    #endif
-
+    purple_debug_info("mrim", "{%u} ping sent\n", (guint) md->tx_seq);
     return TRUE;
 }
 
@@ -216,9 +276,7 @@ _dispatch_hello_ack(MrimData *md, MrimPktHelloAck *pkt)
 
     md->keepalive = pkt->timeout;
 
-    #ifdef ENABLE_MRIM_DEBUG
     purple_debug_info("mrim", "keepalive is %u\n", md->keepalive);
-    #endif
 
     login = purple_account_get_username(md->account);
     pass = purple_account_get_password(md->account);
@@ -240,15 +298,16 @@ _dispatch_hello_ack(MrimData *md, MrimPktHelloAck *pkt)
 static void
 _dispatch_login_ack(MrimData *md, MrimPktLoginAck *pkt)
 {
-    #ifdef ENABLE_MRIM_DEBUG
     purple_debug_info("mrim", "login succeded\n");
-    #endif
+
     purple_connection_set_state(md->account->gc, PURPLE_CONNECTED);
 }
 
 static void
 _dispatch_login_rej(MrimData *md, MrimPktLoginRej *pkt)
 {
+    purple_debug_info("mrim", "login failed\n");
+
     purple_connection_error_reason(
         md->account->gc,
         PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED,
@@ -260,6 +319,8 @@ static void
 _dispatch_connection_param(MrimData *md, MrimPktConnectionParams *pkt)
 {
     md->keepalive = pkt->timeout;
+
+    purple_debug_info("mrim", "keepalive period %u\n", (guint) pkt->timeout);
 
     if (md->keepalive_handle) {
         purple_timeout_remove(md->keepalive_handle);
@@ -278,26 +339,168 @@ _dispatch_connection_param(MrimData *md, MrimPktConnectionParams *pkt)
 static void
 _dispatch_user_info(MrimData *md, MrimPktUserInfo *pkt)
 {
+    GList *item;
     const gchar *own_alias = purple_account_get_alias(md->account);
     const gchar *new_alias = g_hash_table_lookup(pkt->info, "MRIM.NICKNAME");
     
-    #ifdef ENABLE_MRIM_DEBUG
-    GList *key = g_hash_table_get_keys(pkt->info);
-    while (key) {
-        purple_debug_info("mrim", "User info '%s'='%s'\n", key->data, g_hash_table_lookup(pkt->info, key->data));
-        key = g_list_next(key);
+    for (item = g_hash_table_get_keys(pkt->info); item; item = g_list_next(item)) {
+        purple_debug_info("mrim", "user info '%s'='%s'\n", item->data, 
+                        g_hash_table_lookup(pkt->info, item->data));
     }
-    g_list_free(key);
-    #endif
+    g_list_free(g_list_first(item));
 
     if ((new_alias && strlen(new_alias)) && !(own_alias && strlen(own_alias))) {
         purple_account_set_alias(md->account, new_alias);
     }
 }
+static const gchar*
+_contact_operation_reason(guint32 status)
+{
+    switch (status) {
+        case CONTACT_OPER_SUCCESS:
+            return "Operation succeded";
+            break;
+        case CONTACT_OPER_ERROR:
+            return "Incorrect data";
+            break;
+        case CONTACT_OPER_INTERR:
+            return "Internal error";
+            break;
+        case CONTACT_OPER_NO_SUCH_USER:
+            return "No such user";
+            break;
+        case CONTACT_OPER_INVALID_INFO:
+            return "Incorrect user name";
+            break;
+        case CONTACT_OPER_USER_EXISTS:
+            return "User already exists";
+            break;
+        case CONTACT_OPER_GROUP_LIMIT:
+            return "Limit of groups exceeded";
+            break;
+        default:
+            return "Unknown error";
+            break;
+    }
+}
+
+static void
+_dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
+{
+    purple_debug_info("mrim", "{%u} add contact ack status %u\n", pkt->header.seq, pkt->status);
+
+    const gchar *reason = _contact_operation_reason(pkt->status);
+    MrimAttempt *atmp = g_hash_table_lookup(md->attempts, (gpointer) pkt->header.seq);
+
+    if (!atmp) {
+        purple_debug_warning("mrim", "failed to find attempt for seq %u\n", (guint) pkt->header.seq);
+        return;
+    }
+
+    if (atmp->type == ATTEMPT_ADD_GROUP) {
+        if (pkt->status == CONTACT_OPER_SUCCESS) {
+            md->groups = g_list_insert(md->groups, atmp->group, pkt->contact_id);            
+        }
+        else if (pkt->status == CONTACT_OPER_USER_EXISTS) {
+            purple_debug_info("mrim", "group already existed\n");
+        }
+        else {
+            purple_notify_error(md->account->gc, "Adding group", 
+                                        "Failed to create group on server", reason);
+            purple_blist_remove_group(atmp->group);
+        }
+    }
+
+    else if (atmp->type == ATTEMPT_ADD_BUDDY) {
+        if (pkt->status == CONTACT_OPER_SUCCESS) {
+            md->buddies = g_list_insert(md->buddies, atmp->buddy, pkt->contact_id);
+        }
+        else if (pkt->status == CONTACT_OPER_USER_EXISTS) {
+            purple_debug_info("mrim", "user already existed\n");
+        }
+        else {
+            purple_notify_error(md->account->gc, "Adding user", 
+                                        "Failed to create user on server", reason);
+            purple_blist_remove_buddy(atmp->buddy);
+        }
+    }
+    
+    else {
+        purple_debug_warning("mrim", "unexpected type of attempt for seq %u\n", 
+                                    (guint) pkt->header.seq);
+    }
+
+    g_hash_table_remove(md->attempts, (gpointer) pkt->header.seq);
+}
+
+static void
+_dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
+{
+    purple_debug_info("mrim", "{%u} modify contact ack status %u\n", pkt->header.seq, pkt->status);
+
+    GList *item = NULL;
+    const gchar *reason = _contact_operation_reason(pkt->status);
+    MrimAttempt *atmp = g_hash_table_lookup(md->attempts, (gpointer) pkt->header.seq);
+
+    if (!atmp) {
+        purple_debug_warning("mrim", "failed to find attempt for seq %u\n", (guint) pkt->header.seq);
+        return;
+    }
+
+    if (atmp->type == ATTEMPT_REM_GROUP) {
+        if (pkt->status == CONTACT_OPER_SUCCESS) {
+            if (item = g_list_find(md->groups, atmp->group)) {
+                item->data = NULL;
+            }
+        }
+        else {
+            purple_notify_error(md->account->gc, "Removing group", 
+                                        "Failed to remove group on server", reason);
+            /* HOWTO undo deletion ? */
+        }
+    }
+
+    else if (atmp->type == ATTEMPT_MOD_GROUP) {
+        if (pkt->status != CONTACT_OPER_SUCCESS) {
+            purple_notify_error(md->account->gc, "Modifing group",
+                                        "Failed to modify group on server", reason);
+        }
+    }
+
+    else if (atmp->type == ATTEMPT_REM_BUDDY) {
+        if (pkt->status == CONTACT_OPER_SUCCESS) {
+            if (item = g_list_find(md->buddies, atmp->buddy)) {
+                item->data = NULL;
+            }
+        }
+        else {
+            purple_notify_error(md->account->gc, "Removing user", 
+                                        "Failed to remove user on server", reason);
+            /* HOWTO undo deletion ? */
+        }
+    }
+    
+    else if (atmp->type == ATTEMPT_MOD_BUDDY) {
+        if (pkt->status != CONTACT_OPER_SUCCESS) {
+            purple_notify_error(md->account->gc, "Modifing user",
+                                        "Failed to modify user on server", reason);
+        }
+    }
+
+    else {
+        purple_debug_warning("mrim", "unexpected type of attempt for seq %u\n", 
+                                    (guint) pkt->header.seq);
+    }
+
+    g_hash_table_remove(md->attempts, (gpointer) pkt->header.seq);
+}
 
 static void
 _dispatch_user_status(MrimData *md, MrimPktUserStatus *pkt)
 {
+    purple_debug_info("mrim", "contact status changed %s to 0x%08x\n",
+                        pkt->email, (guint) pkt->status);
+
     purple_prpl_got_user_status(md->account, pkt->email, 
                         _status_mrim2purple(pkt->status), NULL);
 }
@@ -313,19 +516,34 @@ _dispatch_logout(MrimData *md, MrimPktLogout *pkt)
 }
 
 static void
-__hash_dump_p(gpointer key, gpointer val, gpointer dat)
+_dump_contact_list(MrimData *md)
 {
-    fprintf(stderr, "%s: '%s' => %p\n", dat, key, val);
+    GList *item;
+    PurpleGroup *group;
+    PurpleBuddy *buddy;
+    guint i = 0;
+
+    purple_debug_info("mrim", "contact_list\n");
+
+    for (item = md->groups, i = 0; item; item = g_list_next(item), i++) {
+        group = (PurpleGroup*) item->data;
+        purple_debug_info("mrim", "\tgroup [%04u] %s\n", i, 
+                        group ? purple_group_get_name(group) : "(removed)");
+    }
+    for (item = md->buddies, i = 0; item; item = g_list_next(item), i++) {
+        buddy = (PurpleBuddy*) item->data;
+        purple_debug_info("mrim", "\tbuddy [%04u] %s\n", i + MAX_GROUP, 
+                        buddy ? purple_buddy_get_name(buddy) : "(removed)");
+    }
 }
 
 static void
 _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
 {
-    MrimPktContactList_Group *group = NULL;
-    MrimPktContactList_Contact *contact = NULL;
-    PurpleGroup *pg = NULL;
-    PurpleBuddy *pb = NULL;
-    PurplePresence *pp = NULL;
+    MrimGroup *mgroup = NULL;
+    MrimContact *contact = NULL;
+    PurpleGroup *group = NULL;
+    PurpleBuddy *buddy = NULL;
     GList *item = NULL;
 
     if (pkt->status != GET_CONTACTS_OK) {
@@ -337,53 +555,64 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     }
   
     /* ensure groups */
-    item = g_list_first(pkt->groups);
-    while (item) {
-        group = (MrimPktContactList_Group*) item->data;
-        if (!(pg = purple_find_group(group->name))) {
-            pg = purple_group_new(group->name);
-            purple_blist_add_group(pg, NULL);
+    for (item = g_list_first(pkt->groups); item; item = g_list_next(item)) {
+        mgroup = (MrimGroup*) item->data;
+        if (!(mgroup->flags & CONTACT_FLAG_REMOVED)) {
+            if (!(group = purple_find_group(mgroup->name))) {
+                group = purple_group_new(mgroup->name);
+                purple_blist_add_group(group, NULL);
+            }
+            md->groups = g_list_append(md->groups, group);
         }
-        md->groups = g_list_append(md->groups, pg);
-        item = g_list_next(item);
+        else {
+            /* do not remove groups as they can be used by another accounts */
+            md->groups = g_list_append(md->groups, NULL);
+        }
     }
     md->groups = g_list_first(md->groups);
 
     /* ensure buddies */
-    item = g_list_first(pkt->contacts);
-    while (item) {
-        contact = (MrimPktContactList_Contact*) item->data;
-        if (!(pb = purple_find_buddy(md->account, contact->email))) {
-            pb = purple_buddy_new(md->account, contact->email, contact->nick);
-            pg = g_list_nth_data(md->groups, contact->group);
-            purple_blist_add_buddy(pb, NULL, pg, NULL);
+    for (item = g_list_first(pkt->contacts); item; item = g_list_next(item)) {
+        contact = (MrimContact*) item->data;
+        if (!(contact->flags & CONTACT_FLAG_REMOVED)) {
+            if (!(buddy = purple_find_buddy(md->account, contact->email))) {
+                buddy = purple_buddy_new(md->account, contact->email, contact->nick);
+                group = g_list_nth_data(md->groups, contact->group_id);
+                purple_blist_add_buddy(buddy, NULL, group, NULL);
+            }
+            purple_prpl_got_user_status(md->account, contact->email, 
+                                    _status_mrim2purple(contact->status), NULL);
+            md->buddies = g_list_append(md->buddies, buddy);
         }
-        purple_prpl_got_user_status(md->account, contact->email, 
-                                _status_mrim2purple(contact->status), NULL);
-        md->buddies = g_list_append(md->buddies, pb);
-        item = g_list_next(item);
+        else {
+            if (buddy = purple_find_buddy(md->account, contact->email)) {
+                purple_blist_remove_buddy(buddy);
+            }
+            md->buddies = g_list_append(md->buddies, NULL);
+        }
     }
     md->buddies = g_list_first(md->buddies);
 
-    /* remove stale buddies */
+    /* remove not existing buddies */
     GSList *buddies = NULL, *sitem = NULL;
     buddies = sitem = purple_find_buddies(md->account, NULL);
     while (sitem) {
         if (!g_list_find(md->buddies, sitem->data)) {
-            purple_blist_remove_buddy((PurpleBuddy*) sitem->data);
+            buddy = (PurpleBuddy*) sitem->data;
+            purple_blist_remove_buddy(buddy);
+            purple_debug_info("mrim", "contact_list: not existing contact %s\n",
+                                                purple_buddy_get_name(buddy));
         }
         sitem = g_slist_next(sitem);
     }
     g_slist_free(buddies);
+
+    _dump_contact_list(md);
 }
 
 static void
 _dispatch(MrimData *md, MrimPktHeader *pkt)
 {
-    #ifdef ENABLE_MRIM_DEBUG
-    purple_debug_info("mrim", "dispatching message: 0x%X\n", pkt->msg);
-    #endif
-
     switch (pkt->msg) {
         case MRIM_CS_HELLO_ACK:
             _dispatch_hello_ack(md, (MrimPktHelloAck*) pkt);
@@ -411,8 +640,10 @@ _dispatch(MrimData *md, MrimPktHeader *pkt)
             _dispatch_user_info(md, (MrimPktUserInfo*) pkt);
             break;
         case MRIM_CS_ADD_CONTACT_ACK:
+            _dispatch_add_contact_ack(md, (MrimPktAddContactAck*) pkt);
             break;
         case MRIM_CS_MODIFY_CONTACT_ACK:
+            _dispatch_modify_contact_ack(md, (MrimPktModifyContactAck*) pkt);
             break;
         case MRIM_CS_OFFLINE_MESSAGE_ACK:
             break;
@@ -447,7 +678,7 @@ _canread_cb(gpointer data, gint source, PurpleInputCondition cond)
     if (bytes_read == 0 || (bytes_read < 0 && errno != EWOULDBLOCK)) {
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-            "Server connection was lost 2"
+            "Server connection was lost"
         );
         purple_input_remove(md->server.read_handle);
         md->server.read_handle = 0;
@@ -480,9 +711,7 @@ _mrim_login_server_connected(gpointer data, gint source, const gchar *error_mess
         return;
     }
 
-    #ifdef ENABLE_MRIM_DEBUG
     purple_debug_info("mrim", "server connected fd = %d\n", source);
-    #endif
 
     md->server.fd = source;
     md->server.read_handle = purple_input_add(md->server.fd, PURPLE_INPUT_READ,
@@ -520,10 +749,8 @@ _mrim_login_balancer_answered(gpointer data, gint source, PurpleInputCondition c
     close(md->balancer.fd);
     md->balancer.fd = 0;
 
-    #ifdef ENABLE_MRIM_DEBUG
-    purple_debug_info("mrim", "connecting to server: %s:%u\n", md->server.host, 
-        md->server.port);
-    #endif
+    purple_debug_info("mrim", "connecting to server: %s:%u\n", 
+                                    md->server.host, md->server.port);
 
     md->server.connect_data = purple_proxy_connect(NULL, md->account, md->server.host,
                 md->server.port, _mrim_login_server_connected, md);
@@ -550,9 +777,7 @@ _mrim_login_balancer_connected(gpointer data, gint source, const gchar *error_me
         return;
     }
 
-    #ifdef ENABLE_MRIM_DEBUG
     purple_debug_info("mrim", "balancer connected fd = %d\n", source);
-    #endif
    
     md->balancer.fd = source;
     md->balancer.read_handle = purple_input_add(md->balancer.fd, PURPLE_INPUT_READ,
@@ -582,10 +807,8 @@ mrim_login(PurpleAccount *account)
    
     purple_connection_set_state(md->account->gc, PURPLE_CONNECTING);
 
-    #ifdef ENABLE_MRIM_DEBUG
     purple_debug_info("mrim", "resolving balancer host %s:%u\n", 
-                md->balancer.host, md->balancer.port);
-    #endif
+                                    md->balancer.host, md->balancer.port);
 
     md->balancer.connect_data = purple_proxy_connect(NULL, md->account, 
         md->balancer.host, md->balancer.port, _mrim_login_balancer_connected, md);
@@ -606,6 +829,7 @@ mrim_login(PurpleAccount *account)
     md->keepalive_handle =0;
     md->groups = NULL;
     md->buddies = NULL;
+    md->attempts = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
 }
 
 
@@ -682,9 +906,10 @@ mrim_close(PurpleConnection *gc)
     md->groups = NULL;
     g_list_free(md->buddies);
     md->buddies = NULL;
-    #ifndef ENABLE_MRIM_DEBUG
-    purple_debug_info("mrim", "resources freed\n");
-    #endif
+    g_hash_table_destroy(md->attempts);
+    md->attempts = NULL;
+
+    purple_debug_info("mrim", "resources were freeed\n");
 }
 
 /*
@@ -740,7 +965,7 @@ mrim_set_status(PurpleAccount *account, PurpleStatus *status)
         _send_out(md);
     }
     else {
-        fprintf(stderr, "Unexpected status %s\n", purple_status_get_id(status));
+        purple_debug_error("mrim", "unexpected status %s\n", purple_status_get_id(status));
     }
 }
 
@@ -750,11 +975,25 @@ mrim_set_idle(PurpleConnection *gc, int idletime)
 {
 }
 
-/* chage account passwd */
-void 
-mrim_change_passwd(PurpleConnection *gc, const char *old_pass, const char *new_pass)
+static guint32
+_mrim_add_group(MrimData *md, PurpleGroup *group, guint32 fallback)
 {
-
+    guint32 group_id = g_list_length(md->groups);
+    if (group_id >= MAX_GROUP) {
+        purple_notify_error(md->account->gc, "Adding group", "Unable to create new group on server", 
+                                "Limit of groups on server exceeded");
+        return fallback;
+    }
+    else {
+        purple_debug_info("mrim", "adding group %s %u\n", purple_group_get_name(group), 
+                                    (guint) group_id);
+        mrim_pkt_build_add_contact(md, CONTACT_FLAG_GROUP | (group_id << 24), 0, 
+                                    purple_group_get_name(group), purple_group_get_name(group));
+        _send_out(md);
+        g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, 
+                                    _attemp_new_for_group(group, ATTEMPT_ADD_GROUP));
+        return group_id;
+    }
 }
 
 /*
@@ -768,25 +1007,127 @@ mrim_change_passwd(PurpleConnection *gc, const char *old_pass, const char *new_p
 void 
 mrim_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group)
 {
+    MrimData *md = (MrimData*) gc->proto_data;
+    gint32 group_id = _get_group_id(md, group);
 
+    if (group_id < 0) {
+        group_id = _mrim_add_group(md, group, 0);
+    }
+
+    purple_debug_info("mrim", "adding user %s %s %u\n", purple_buddy_get_name(buddy), 
+                                    purple_buddy_get_alias(buddy), (guint) group_id);
+    mrim_pkt_build_add_contact(md, 0, group_id, purple_buddy_get_name(buddy), 
+                                    purple_buddy_get_alias(buddy));
+    _send_out(md);
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, 
+                                            _attemp_new_for_buddy(buddy, ATTEMPT_ADD_BUDDY));
 }
+
 
 /* Remove one buddy from a contact list */
 void 
 mrim_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group)
 {
+    MrimData *md = (MrimData*) gc->proto_data;
+    gint32 group_id = _get_group_id(md, group);
+    gint32 id = _get_contact_id(md, buddy);
+
+    if (group_id < 0) {
+        purple_debug_warning("mrim", "remove buddy: failed to find group in contact list for %s\n",
+                                purple_group_get_name(group));
+        group_id = 0;
+    }
+    if (id < 0) {
+        purple_debug_error("mrim", "remove buddy: failed to find buddy in contact list for %s\n",
+                                purple_buddy_get_name(buddy));
+        return;
+    }
+
+    mrim_pkt_build_modify_contact(md, id, CONTACT_FLAG_REMOVED, group_id, purple_buddy_get_name(buddy), 
+                                purple_buddy_get_alias(buddy));
+    _send_out(md);
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, 
+                                _attemp_new_for_buddy(buddy, ATTEMPT_REM_BUDDY));
+
+    purple_debug_info("mrim", "{%u} removing user %s\n", (guint) md->tx_seq, 
+                                purple_buddy_get_name(buddy));
 }
 
-/* Chane a buddy group on a server */
+/* Change a buddy alias on a server */
 void 
-mrim_group_buddy(PurpleConnection *gc, const char *who, const char *old_group, const char *new_group)
+mrim_alias_buddy(PurpleConnection *gc, const char *who, const char *alias)
 {
+    MrimData *md = (MrimData*) gc->proto_data;
+    PurpleBuddy *buddy = purple_find_buddy(md->account, who);
+    PurpleGroup *group = purple_buddy_get_group(buddy);
+    gint32 id = _get_contact_id(md, buddy);
+    gint32 group_id = _get_group_id(md, group);
+
+    if (id < 0) {
+        purple_debug_error("mrim", "renaming buddy: failed to find user in contact list for %s\n",
+                                who);
+        return;
+    }
+    mrim_pkt_build_modify_contact(md, id, 0, group_id, who, alias);
+    _send_out(md);
+
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, 
+                                _attemp_new_for_buddy(buddy, ATTEMPT_MOD_BUDDY));
+
+    purple_debug_info("mrim", "{%u} renaming user %u (%s) to %s\n", (guint) md->tx_seq, 
+                                id, purple_buddy_get_name(buddy), alias);
+}
+
+/* Change a buddy group on a server */
+void 
+mrim_group_buddy(PurpleConnection *gc, const char *who, const char *old, const char *new)
+{
+    MrimData *md = (MrimData*) gc->proto_data;
+    PurpleGroup *old_group = purple_find_group(old);
+    PurpleGroup *new_group = purple_find_group(new);
+    PurpleBuddy *buddy = purple_find_buddy_in_group(md->account, who, new_group);
+
+    gint32 id = 0, group_id = 0, fallback = 0;
+
+    if ((id = _get_contact_id(md, buddy)) < 0) {
+        purple_debug_error("mrim", "group_buddy: failed to find buddy in contact list for %s\n", who);
+    }
+    if ((group_id = _get_group_id(md, new_group)) < 0) {
+        fallback = _get_group_id(md, old_group);
+        if (fallback < 0) {
+            fallback = 0;
+        }
+        group_id = _mrim_add_group(md, new_group, (guint32) fallback);
+    }
+    mrim_pkt_build_modify_contact(md, id, 0, group_id, purple_buddy_get_name(buddy), 
+                                purple_buddy_get_alias(buddy));
+    _send_out(md);
+
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, 
+                                _attemp_new_for_buddy(buddy, ATTEMPT_MOD_BUDDY));
+
+    purple_debug_info("mrim", "{%u} moving user %s to group %u\n", (guint) md->tx_seq, 
+                                purple_buddy_get_name(buddy), (guint) group_id);
 }
 
 /* Rename group on a server side */
 void 
 mrim_rename_group(PurpleConnection *gc, const char *old_name, PurpleGroup *group, GList *moved_buddies)
 {
+    MrimData *md = (MrimData*) gc->proto_data;
+    gint32 id = _get_group_id(md, group);
+    if (id < 0) {
+        purple_debug_info("mrim", "rename group: failed to find group in contact list for %s\n", 
+                                        purple_group_get_name(group));
+        return;
+    }
+    mrim_pkt_build_modify_contact(md, id, CONTACT_FLAG_GROUP, 0, purple_group_get_name(group),
+                                purple_group_get_name(group));
+    _send_out(md);
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq,
+                                _attemp_new_for_group(group, ATTEMPT_MOD_GROUP));
+    purple_debug_info("mrim", "{%u} renaming group %u from %s to %s\n", (guint) md->tx_seq,
+                                id, old_name, purple_group_get_name(group));
 }
 
 /*
@@ -810,6 +1151,23 @@ mrim_normalize(const PurpleAccount *account, const char *who)
 void 
 mrim_remove_group(PurpleConnection *gc, PurpleGroup *group)
 {
+    MrimData *md = (MrimData*) gc->proto_data;
+    gint32 id = _get_group_id(md, group);
+
+    if (id <= 0) {
+        purple_debug_error("mrim", "remove group: failed to find group in contact list %s\n",
+                    purple_group_get_name(group));
+        return;
+    }
+
+    mrim_pkt_build_modify_contact(md, id, CONTACT_FLAG_REMOVED | CONTACT_FLAG_GROUP, 0, 
+                                purple_group_get_name(group), purple_group_get_name(group));
+    _send_out(md);
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, 
+                                _attemp_new_for_group(group, ATTEMPT_REM_GROUP));
+
+    purple_debug_info("mrim", "{%u} removing group %s\n", (guint) md->tx_seq,
+                                purple_group_get_name(group));
 }
 
 /* Checks whether offline messages to @a buddy are supported.
@@ -819,7 +1177,7 @@ mrim_remove_group(PurpleConnection *gc, PurpleGroup *group)
 gboolean 
 mrim_offline_message(const PurpleBuddy *buddy)
 {
-    return 1;
+    return TRUE;
 }
 
 /* Sends buzzzzz signal to a buddy */

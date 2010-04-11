@@ -40,7 +40,7 @@ typedef struct {
 
     GList *groups;
     GList *buddies;
-
+    GHashTable *attempts;
 } MrimData;
 
 const char *
@@ -93,6 +93,9 @@ mrim_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group);
 
 void
 mrim_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group);
+
+void 
+mrim_alias_buddy(PurpleConnection *gc, const char *who, const char *alias);
 
 void
 mrim_group_buddy(PurpleConnection *gc, const char *who, const char *old_group, const char *new_group);
