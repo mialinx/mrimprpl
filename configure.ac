@@ -1,9 +1,10 @@
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ([2.65])
 AC_INIT([mrimprpl], [0.1], [mialinx@gmail.com])
-AM_INIT_AUTOMAKE([mrimprpl], [0.1])
+AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_SRCDIR([proto.h])
 AC_CONFIG_HEADERS([config.h])
+AM_INIT_AUTOMAKE([mrimprpl], [0.1])
 
 # Checks for programs.
 AC_PROG_CC

@@ -6,3 +6,6 @@ autom4te.cache/*
 .deps
 .libs
 *~
+*.o
+*.lo
+*.la
