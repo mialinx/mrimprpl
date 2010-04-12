@@ -1,3 +1,5 @@
+Makefile
+libtool
 config.h
 config.status
 config.log
