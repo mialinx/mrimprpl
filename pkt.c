@@ -208,6 +208,58 @@ mrim_pkt_build_modify_contact(MrimData *md, guint32 id, guint32 flags, guint32 g
     g_free(lps_unused);
 }
 
+void
+mrim_pkt_build_message(MrimData *md, guint32 flags, gchar *to, gchar *message, gchar *rtf_message)
+{
+    MrimPktHeader header;
+    MrimPktLps *lps_to = NULL, *lps_message = NULL, *lps_rtf_message = NULL;
+
+    flags = GUINT32_TO_LE(flags);
+    if (!(lps_to = _str2lps(to))) {
+        return;
+    }
+    if (!(lps_message = _str2lps(message))) {
+        g_free(lps_to);
+        return;
+    }
+    if (!(lps_rtf_message = _str2lps(rtf_message))) {
+        g_free(lps_to);
+        g_free(lps_message);
+        return;
+    }
+    _init_header(&header, ++md->tx_seq, MRIM_CS_MESSAGE, sizeof(flags) + LPS_LEN(lps_to)
+        + LPS_LEN(lps_message) + LPS_LEN(lps_rtf_message));
+
+    purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
+    purple_circ_buffer_append(md->server.tx_buf, &flags, sizeof(flags));
+    purple_circ_buffer_append(md->server.tx_buf, lps_to, LPS_LEN(lps_to));
+    purple_circ_buffer_append(md->server.tx_buf, lps_message, LPS_LEN(lps_message));
+    purple_circ_buffer_append(md->server.tx_buf, lps_rtf_message, LPS_LEN(lps_rtf_message));
+
+    g_free(lps_to);
+    g_free(lps_message);
+    g_free(lps_rtf_message);
+}
+
+void
+mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id)
+{
+    MrimPktHeader header;
+    MrimPktLps *lps_from = NULL;
+
+    msg_id = GUINT32_TO_LE(msg_id);
+    if (!(lps_from = _str2lps(from))) {
+        return;
+    }
+    _init_header(&header, ++md->tx_seq, MRIM_CS_MESSAGE_RECV, sizeof(msg_id) + LPS_LEN(lps_from));
+
+    purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
+    purple_circ_buffer_append(md->server.tx_buf, lps_from, LPS_LEN(lps_from));
+    purple_circ_buffer_append(md->server.tx_buf, &msg_id, sizeof(msg_id));
+
+    g_free(lps_from);
+}
+
 /* Server to Client messages */
 
 /* Collect bytes in rx_pkt_buf for just one packet 
@@ -381,10 +433,33 @@ _parse_login_rej(MrimData *md, MrimPktHeader *pkt)
     return loc;
 }
 
+static MrimPktMessageAck *
+_parse_message_ack(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    MrimPktMessageAck *loc = g_new0(MrimPktMessageAck, 1);
+    _read_header(pkt, &loc->header, &pos);
+    loc->msg_id = _read_ul(pkt, &pos);
+    loc->flags = _read_ul(pkt, &pos);
+    loc->from = _read_lps(pkt, &pos);
+    loc->message = _read_lps(pkt, &pos);
+    loc->rtf_message = _read_lps(pkt, &pos);
+    return loc;
+}
+
 static void
 _free_login_rej(MrimPktLoginRej *loc)
 {
     g_free(loc->reason);
+    g_free(loc);
+}
+
+static void
+_free_message_ack(MrimPktMessageAck *loc)
+{
+    g_free(loc->from);
+    g_free(loc->message);
+    g_free(loc->rtf_message);
     g_free(loc);
 }
 
@@ -592,6 +667,7 @@ fprintf(stderr, "parsing 0x%08x\n", GUINT32_FROM_LE(pkt->msg));
             loc = (MrimPktHeader*) _parse_login_rej(md, pkt);
             break;
         case MRIM_CS_MESSAGE_ACK:
+            loc = (MrimPktHeader*) _parse_message_ack(md, pkt);
             break;
         case MRIM_CS_MESSAGE_STATUS:
             break;
@@ -652,6 +728,7 @@ mrim_pkt_free(MrimPktHeader *loc)
                 _free_login_rej((MrimPktLoginRej*) loc);
                 break;
             case MRIM_CS_MESSAGE_ACK:
+                _free_message_ack((MrimPktMessageAck*) loc);
                 break;
             case MRIM_CS_MESSAGE_STATUS:
                 break;

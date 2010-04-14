@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 #include "mrim.h"
 #include "pkt.h"
 
@@ -316,6 +317,27 @@ _dispatch_login_rej(MrimData *md, MrimPktLoginRej *pkt)
 }
 
 static void
+_dispatch_message_ack(MrimData *md, MrimPktMessageAck *pkt)
+{
+    /* TODO REWRITE IT */
+    purple_debug_info("mrim", "message received from %s flags 0x%08x\n", 
+                                pkt->from, (guint) pkt->flags);
+
+    PurpleConversation *conv;
+
+    conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, pkt->from, md->account);
+    if (!conv) {
+        conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, pkt->from);
+    }
+    purple_conversation_set_name(conv, pkt->from);
+
+    purple_conversation_write(conv, pkt->from, pkt->message, PURPLE_MESSAGE_RECV, time(NULL));
+
+    mrim_pkt_build_message_recv(md, pkt->from, pkt->msg_id);
+    _send_out(md);
+}
+
+static void
 _dispatch_connection_param(MrimData *md, MrimPktConnectionParams *pkt)
 {
     md->keepalive = pkt->timeout;
@@ -624,6 +646,7 @@ _dispatch(MrimData *md, MrimPktHeader *pkt)
             _dispatch_login_rej(md, (MrimPktLoginRej*) pkt);
             break;
         case MRIM_CS_MESSAGE_ACK:
+            _dispatch_message_ack(md, (MrimPktMessageAck*) pkt);
             break;
         case MRIM_CS_MESSAGE_STATUS:
             break;
