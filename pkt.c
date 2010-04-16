@@ -12,7 +12,7 @@ typedef struct {
     gchar data[];
 } MrimPktLps;
 
-static MrimPktLps *
+static MrimPktLps*
 _str2lps(const gchar *str)
 {
     gchar *data = NULL;
@@ -35,7 +35,7 @@ _str2lps(const gchar *str)
     return lps;
 }
 
-static gchar *
+static gchar*
 _lps2str(MrimPktLps *lps)
 {
     gchar *str = NULL;
@@ -260,13 +260,30 @@ mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id)
     g_free(lps_from);
 }
 
+void
+mrim_pkt_build_authorize(MrimData *md, gchar *email)
+{
+    MrimPktHeader header;
+    MrimPktLps *lps_email = NULL;
+
+    if (!(lps_email = _str2lps(email))) {
+        return;
+    }
+    _init_header(&header, ++md->tx_seq, MRIM_CS_AUTHORIZE, LPS_LEN(lps_email));
+
+    purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
+    purple_circ_buffer_append(md->server.tx_buf, lps_email, LPS_LEN(lps_email));
+
+    g_free(lps_email);
+}
+
 /* Server to Client messages */
 
 /* Collect bytes in rx_pkt_buf for just one packet 
    Returns NULL if there are not sufficient bytes in circle buffer
 */
 
-static MrimPktHeader *
+static MrimPktHeader*
 _collect(MrimData *md)
 {
     guint available = 0;
@@ -337,7 +354,7 @@ _skip_ul(MrimPktHeader *pkt, guint32 *pos)
     *pos += sizeof(guint32);
 }
 
-static gchar *
+static gchar*
 _read_lps(MrimPktHeader *pkt, guint32 *pos)
 {
     MrimPktLps *lps = (MrimPktLps*) (((gchar*)pkt) + *pos);
@@ -352,7 +369,7 @@ _skip_lps(MrimPktHeader *pkt, guint32 *pos)
     *pos += LPS_LEN(lps);
 }
 
-static gchar *
+static gchar*
 _read_str(MrimPktHeader *pkt, guint32 *pos)
 {
     gchar *str = g_strdup(((gchar*)pkt) + *pos);
@@ -392,7 +409,7 @@ _skip_by_mask(MrimPktHeader *pkt, guint32 *pos, gchar *mask)
 
 /* particular packets */
 
-static MrimPktHelloAck *
+static MrimPktHelloAck*
 _parse_hello_ack(MrimData *md, MrimPktHeader *pkt)
 {
     guint32 pos = 0;
@@ -408,7 +425,7 @@ _free_hello_ack(MrimPktHelloAck *loc)
     g_free(loc);
 }
 
-static MrimPktLoginAck *
+static MrimPktLoginAck*
 _parse_login_ack(MrimData *md, MrimPktHeader *pkt)
 {
     guint32 pos = 0;
@@ -423,7 +440,7 @@ _free_login_ack(MrimPktLoginAck *loc)
     g_free(loc);
 }
 
-static MrimPktLoginRej *
+static MrimPktLoginRej*
 _parse_login_rej(MrimData *md, MrimPktHeader *pkt)
 {
     guint32 pos = 0;
@@ -433,7 +450,7 @@ _parse_login_rej(MrimData *md, MrimPktHeader *pkt)
     return loc;
 }
 
-static MrimPktMessageAck *
+static MrimPktMessageAck*
 _parse_message_ack(MrimData *md, MrimPktHeader *pkt)
 {
     guint32 pos = 0;
@@ -497,7 +514,7 @@ _free_logout(MrimPktLogout *loc)
     g_free(loc);
 }
 
-static MrimPktConnectionParams *
+static MrimPktConnectionParams*
 _parse_connection_params(MrimData *md, MrimPktHeader *pkt)
 {
     guint32 pos = 0;
@@ -513,7 +530,7 @@ _free_connection_params(MrimPktConnectionParams *loc)
     g_free(loc);
 }
 
-static MrimPktUserInfo *
+static MrimPktUserInfo*
 _parse_user_info(MrimData *md, MrimPktHeader *pkt)
 {
     guint32 pos = 0;
@@ -536,7 +553,7 @@ _free_user_info(MrimPktUserInfo *loc)
     g_free(loc);
 }
 
-static MrimPktContactList *
+static MrimPktContactList*
 _parse_contact_list(MrimData *md, MrimPktHeader *pkt)
 {
     MrimPktContactList *loc = NULL;
@@ -611,7 +628,7 @@ _free_contact_list(MrimPktContactList *loc)
     g_free(loc);
 }
 
-static MrimPktAddContactAck *
+static MrimPktAddContactAck*
 _parse_add_contact_ack(MrimData *md, MrimPktHeader *pkt)
 {
     guint32 pos = 0;
@@ -622,13 +639,23 @@ _parse_add_contact_ack(MrimData *md, MrimPktHeader *pkt)
     return loc;
 }
 
-static MrimPktModifyContactAck *
+static MrimPktModifyContactAck*
 _parse_modify_contact_ack(MrimData *md, MrimPktHeader *pkt)
 {
     guint32 pos = 0;
     MrimPktModifyContactAck *loc = g_new0(MrimPktModifyContactAck, 1);
     _read_header(pkt, &loc->header, &pos);
     loc->status = _read_ul(pkt, &pos);
+    return loc;
+}
+
+static MrimPktAuthorizeAck*
+_parse_authorize_ack(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    MrimPktAuthorizeAck *loc = g_new0(MrimPktAuthorizeAck, 1);
+    _read_header(pkt, &loc->header, &pos);
+    loc->email = _read_lps(pkt, &pos);
     return loc;
 }
 
@@ -644,7 +671,14 @@ _free_modify_contact_ack(MrimPktModifyContactAck *loc)
     g_free(loc);
 }
 
-MrimPktHeader *
+static void
+_free_authorize_ack(MrimPktAuthorizeAck *loc)
+{
+    g_free(loc->email);
+    g_free(loc);
+}
+
+MrimPktHeader*
 mrim_pkt_parse(MrimData *md)
 {
     MrimPktHeader *pkt = NULL;
@@ -692,6 +726,7 @@ fprintf(stderr, "parsing 0x%08x\n", GUINT32_FROM_LE(pkt->msg));
         case MRIM_CS_OFFLINE_MESSAGE_ACK:
             break;
         case MRIM_CS_AUTHORIZE_ACK:
+            loc = (MrimPktHeader*) _parse_authorize_ack(md, pkt);
             break;
         case MRIM_CS_MPOP_SESSION:
             break;
@@ -753,6 +788,7 @@ mrim_pkt_free(MrimPktHeader *loc)
             case MRIM_CS_OFFLINE_MESSAGE_ACK:
                 break;
             case MRIM_CS_AUTHORIZE_ACK:
+                _free_authorize_ack((MrimPktAuthorizeAck*) loc);
                 break;
             case MRIM_CS_MPOP_SESSION:
                 break;

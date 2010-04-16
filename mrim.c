@@ -998,25 +998,26 @@ mrim_set_idle(PurpleConnection *gc, int idletime)
 {
 }
 
-static guint32
-_mrim_add_group(MrimData *md, PurpleGroup *group, guint32 fallback)
+static void
+_mrim_add_group(MrimData *md, PurpleGroup *group, PurpleBuddy *pending)
 {
-    guint32 group_id = g_list_length(md->groups);
-    if (group_id >= MAX_GROUP) {
-        purple_notify_error(md->account->gc, "Adding group", "Unable to create new group on server", 
-                                "Limit of groups on server exceeded");
-        return fallback;
+/* TODO ADD pending buddy in group create ack*/
+    GList *item;
+    guint32 group_count = 0;
+
+    for (item = md->groups; item; item = g_list_next(item)) {
+        if (item->data) {
+            group_count++;
+        }
     }
-    else {
-        purple_debug_info("mrim", "adding group %s %u\n", purple_group_get_name(group), 
-                                    (guint) group_id);
-        mrim_pkt_build_add_contact(md, CONTACT_FLAG_GROUP | (group_id << 24), 0, 
-                                    purple_group_get_name(group), purple_group_get_name(group));
-        _send_out(md);
-        g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, 
-                                    _attemp_new_for_group(group, ATTEMPT_ADD_GROUP));
-        return group_id;
-    }
+    purple_debug_info("mrim", "adding group %s (group count = %u)\n", purple_group_get_name(group), 
+                                (guint) group_count);
+    mrim_pkt_build_add_contact(md, CONTACT_FLAG_GROUP | (group_count << 24), 0, 
+                                purple_group_get_name(group), purple_group_get_name(group));
+    _send_out(md);
+
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, 
+                                _attemp_new_for_group(group, ATTEMPT_ADD_GROUP));
 }
 
 /*
@@ -1034,7 +1035,8 @@ mrim_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group)
     gint32 group_id = _get_group_id(md, group);
 
     if (group_id < 0) {
-        group_id = _mrim_add_group(md, group, 0);
+        group_id = 0; /* set it later */
+        _mrim_add_group(md, group, buddy);
     }
 
     purple_debug_info("mrim", "adding user %s %s %u\n", purple_buddy_get_name(buddy), 
@@ -1116,11 +1118,10 @@ mrim_group_buddy(PurpleConnection *gc, const char *who, const char *old, const c
         purple_debug_error("mrim", "group_buddy: failed to find buddy in contact list for %s\n", who);
     }
     if ((group_id = _get_group_id(md, new_group)) < 0) {
-        fallback = _get_group_id(md, old_group);
-        if (fallback < 0) {
-            fallback = 0;
+        if ((group_id = _get_group_id(md, old_group)) < 0) {
+            group_id = 0;
         }
-        group_id = _mrim_add_group(md, new_group, (guint32) fallback);
+        _mrim_add_group(md, new_group, buddy);
     }
     mrim_pkt_build_modify_contact(md, id, 0, group_id, purple_buddy_get_name(buddy), 
                                 purple_buddy_get_alias(buddy));

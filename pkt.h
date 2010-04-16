@@ -40,6 +40,9 @@ mrim_pkt_build_message(MrimData *md, guint32 flags, gchar *to, gchar *message,
 void
 mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id);
 
+void
+mrim_pkt_build_authorize(MrimData *md, gchar *email);
+
 /* Server to Client messages */
 typedef struct {
     MrimPktHeader header;
@@ -116,6 +119,11 @@ typedef struct {
     gchar *message;
     gchar *rtf_message;
 } MrimPktMessageAck;
+
+typedef struct {
+    MrimPktHeader header;
+    gchar *email;
+} MrimPktAuthorizeAck;
 
 MrimPktHeader *
 mrim_pkt_parse(MrimData *md);
