@@ -22,7 +22,8 @@ _str2lps(const gchar *str)
     GError *err = NULL;
 
     g_get_charset(&local_charset);
-    data = g_convert(str, strlen(str), "WINDOWS-1251", local_charset, NULL, &data_len, &err);
+    data = g_convert_with_fallback(str, strlen(str), "WINDOWS-1251", local_charset, "?", 
+                            NULL, &data_len, &err);
     if (!data) {
         fprintf(stderr, "FAILED STR2LPS: bad encoding %s\n", err->message);
         return NULL;
@@ -44,7 +45,8 @@ _lps2str(MrimPktLps *lps)
     GError *err = NULL;
 
     g_get_charset(&local_charset);
-    str = g_convert(lps->data, lps->length, local_charset, "WINDOWS-1251", NULL, &str_len, &err);
+    str = g_convert_with_fallback(lps->data, lps->length, local_charset, "WINDOWS-1251", "?",
+                            NULL, &str_len, &err);
     if (!str) {
         fprintf(stderr, "FAILED STR2LPS: bad encoding %s\n", err->message);
         return NULL;
