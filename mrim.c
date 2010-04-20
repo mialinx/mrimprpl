@@ -111,19 +111,29 @@ _attempt_destroy(MrimAttempt *atmp)
         case ATMP_ADD_GROUP:
             break;
         case ATMP_MOD_BUDDY:
-            g_free(atmp->mod_buddy.old_alias);
-            g_free(atmp->mod_buddy.old_group_name);
+            if (atmp->mod_buddy.old_alias) {
+                g_free(atmp->mod_buddy.old_alias);
+            }
+            if (atmp->mod_buddy.old_group_name) {
+                g_free(atmp->mod_buddy.old_group_name);
+            }
             break;
         case ATMP_MOD_GROUP:
-            g_free(atmp->mod_group.old_name);
+            if (atmp->mod_group.old_name) {
+                g_free(atmp->mod_group.old_name);
+            }
             break;
         case ATMP_REM_BUDDY:
             break;
         case ATMP_REM_GROUP:
             break;
         case ATMP_MSG:
-            g_free(atmp->msg.name);
-            g_free(atmp->msg.message);
+            if (atmp->msg.name) {
+                g_free(atmp->msg.name);
+            }
+            if (atmp->msg.message) {
+                g_free(atmp->msg.message);
+            }
             break;
         default:
             break;
@@ -808,9 +818,12 @@ _canread_cb(gpointer data, gint source, PurpleInputCondition cond)
     else {
         while (pkt = mrim_pkt_parse(md)) {
             _dispatch(md, pkt);
-            mrim_pkt_free(pkt);
             if (pkt->msg == MRIM_CS_LOGOUT) {
+                mrim_pkt_free(pkt);
                 break;
+            }
+            else {
+                mrim_pkt_free(pkt);
             }
         }
     }
