@@ -1198,6 +1198,7 @@ mrim_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group)
 void 
 mrim_alias_buddy(PurpleConnection *gc, const char *who, const char *alias)
 {
+/* TODO bug is here */
     MrimData *md = (MrimData*) gc->proto_data;
     PurpleBuddy *buddy = purple_find_buddy(md->account, who);
     PurpleGroup *group = purple_buddy_get_group(buddy);
@@ -1210,6 +1211,7 @@ mrim_alias_buddy(PurpleConnection *gc, const char *who, const char *alias)
                                 who);
         return;
     }
+
     mrim_pkt_build_modify_contact(md, id, 0, group_id, who, alias);
     _send_out(md);
 
