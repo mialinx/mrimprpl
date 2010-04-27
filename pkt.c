@@ -211,7 +211,8 @@ mrim_pkt_build_modify_contact(MrimData *md, guint32 id, guint32 flags, guint32 g
 }
 
 void
-mrim_pkt_build_message(MrimData *md, guint32 flags, gchar *to, gchar *message, gchar *rtf_message)
+mrim_pkt_build_message(MrimData *md, guint32 flags, const gchar *to, 
+                        const gchar *message, const gchar *rtf_message)
 {
     MrimPktHeader header;
     MrimPktLps *lps_to = NULL, *lps_message = NULL, *lps_rtf_message = NULL;
@@ -466,6 +467,16 @@ _parse_message_ack(MrimData *md, MrimPktHeader *pkt)
     return loc;
 }
 
+static MrimPktMessageStatus*
+_parse_message_status(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    MrimPktMessageStatus *loc = g_new0(MrimPktMessageStatus, 1);
+    _read_header(pkt, &loc->header, &pos);
+    loc->status = _read_ul(pkt, &pos);
+    return loc;
+}
+
 static void
 _free_login_rej(MrimPktLoginRej *loc)
 {
@@ -479,6 +490,12 @@ _free_message_ack(MrimPktMessageAck *loc)
     g_free(loc->from);
     g_free(loc->message);
     g_free(loc->rtf_message);
+    g_free(loc);
+}
+
+static void
+_free_message_status(MrimPktMessageStatus *loc)
+{
     g_free(loc);
 }
 
@@ -707,6 +724,7 @@ mrim_pkt_parse(MrimData *md)
             loc = (MrimPktHeader*) _parse_message_ack(md, pkt);
             break;
         case MRIM_CS_MESSAGE_STATUS:
+            loc = (MrimPktHeader*) _parse_message_status(md, pkt);
             break;
         case MRIM_CS_USER_STATUS:
             loc = (MrimPktHeader*) _parse_user_status(md, pkt);
@@ -769,6 +787,7 @@ mrim_pkt_free(MrimPktHeader *loc)
                 _free_message_ack((MrimPktMessageAck*) loc);
                 break;
             case MRIM_CS_MESSAGE_STATUS:
+                _free_message_status((MrimPktMessageStatus*) loc);
                 break;
             case MRIM_CS_USER_STATUS:
                 _free_user_status((MrimPktUserStatus*) loc);

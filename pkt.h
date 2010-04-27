@@ -34,8 +34,8 @@ mrim_pkt_build_modify_contact(MrimData *md, guint32 id, guint32 flags, guint32 g
                     const gchar *email, const gchar *name);
 
 void
-mrim_pkt_build_message(MrimData *md, guint32 flags, gchar *to, gchar *message, 
-                    gchar *rtf_message);
+mrim_pkt_build_message(MrimData *md, guint32 flags, const gchar *to, const gchar *message, 
+                    const gchar *rtf_message);
 
 void
 mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id);
@@ -119,6 +119,11 @@ typedef struct {
     gchar *message;
     gchar *rtf_message;
 } MrimPktMessageAck;
+
+typedef struct {
+    MrimPktHeader header;
+    guint32 status;
+} MrimPktMessageStatus;
 
 typedef struct {
     MrimPktHeader header;

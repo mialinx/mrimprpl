@@ -10,6 +10,7 @@
 #include "pkt.h"
 
 #define MAX_GROUP 20
+#define MRIM_TYPING_TIMEOUT 10
 #define MRIM_CIRC_BUFFER_GROW (16 * 1024)
 #define MRIM_LINR_BUFFER_INIT (1024)
 
@@ -398,22 +399,61 @@ _dispatch_login_rej(MrimData *md, MrimPktLoginRej *pkt)
 static void
 _dispatch_message_ack(MrimData *md, MrimPktMessageAck *pkt)
 {
-    /* TODO REWRITE IT */
-    purple_debug_info("mrim", "message received from %s flags 0x%08x\n", 
-                                pkt->from, (guint) pkt->flags);
+    PurpleConversation *conv = NULL;
+    PurpleConvIm *conv_im = NULL;
 
+    purple_debug_info("mrim", "message from %s flags 0x%08x\n", pkt->from, (guint) pkt->flags);
+
+    if (pkt->flags & MESSAGE_FLAG_NOTIFY) {
+        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, pkt->from, md->account);
+        if (!conv) {
+            return;
+        }
+        conv_im = PURPLE_CONV_IM(conv);
+        purple_conv_im_set_typing_state(conv_im, PURPLE_TYPING);
+        purple_conv_im_start_typing_timeout(conv_im, MRIM_TYPING_TIMEOUT);
+    }
+    else {
+        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, pkt->from, md->account);
+        if (!conv) {
+            conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, pkt->from);
+        }
+        purple_conversation_set_name(conv, pkt->from);
+        purple_conversation_write(conv, pkt->from, pkt->message, PURPLE_MESSAGE_RECV, time(NULL));
+    }
+
+    if (!(pkt->flags & MESSAGE_FLAG_NORECV)) {
+        mrim_pkt_build_message_recv(md, pkt->from, pkt->msg_id);
+        _send_out(md);
+    }
+}
+
+static void
+_dispatch_message_status(MrimData *md, MrimPktMessageStatus *pkt)
+{
+    MrimAttempt *atmp;
     PurpleConversation *conv;
 
-    conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, pkt->from, md->account);
-    if (!conv) {
-        conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, pkt->from);
+    if (!(atmp = g_hash_table_lookup(md->attempts, (gpointer) pkt->header.seq))) {
+        purple_debug_error("mrim", "_dispatch_message_status: not attempt for message seq %u\n",
+                                        pkt->header.seq);
+        return;
     }
-    purple_conversation_set_name(conv, pkt->from);
+    if (atmp->type != ATMP_MSG) {
+        purple_debug_error("mrim", "_dispatch_message_status: incorrect attempt type\n");
+        return;
+    }
 
-    purple_conversation_write(conv, pkt->from, pkt->message, PURPLE_MESSAGE_RECV, time(NULL));
+    if (pkt->status == MESSAGE_DELIVERED) {
+        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, 
+                                                atmp->msg.name, md->account);
+        if (!conv) {
+            conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, atmp->msg.name);
+        }
+        purple_conversation_write(conv, atmp->msg.name, atmp->msg.message, PURPLE_MESSAGE_SEND, time(NULL));
 
-    mrim_pkt_build_message_recv(md, pkt->from, pkt->msg_id);
-    _send_out(md);
+        g_hash_table_remove(md->attempts, (gpointer) pkt->header.seq);
+    }
 }
 
 static void
@@ -725,6 +765,7 @@ _dispatch(MrimData *md, MrimPktHeader *pkt)
             _dispatch_message_ack(md, (MrimPktMessageAck*) pkt);
             break;
         case MRIM_CS_MESSAGE_STATUS:
+            _dispatch_message_status(md, (MrimPktMessageStatus*) pkt);
             break;
         case MRIM_CS_USER_STATUS:
             _dispatch_user_status(md, (MrimPktUserStatus*) pkt);
@@ -1028,12 +1069,21 @@ mrim_send_im(PurpleConnection *gc, const char *who, const char *message, PurpleM
 {
     MrimData *md = (MrimData*) gc->proto_data;
     guint32 id;
+    guint32 mrim_flags = 0;
 
-    if (!g_hash_table_lookup_extended(md->contacts, who, NULL (gpointer*) &id)) {
+    if (!g_hash_table_lookup_extended(md->contacts, who, NULL, (gpointer*) &id)) {
         purple_debug_error("mrim", "send_im: failed to find mrim contact for %s\n", who);
         return;
     }
 
+    message = strlen(message) > 0 ? message : " ";
+fprintf(stderr, "%s\n", message);
+    mrim_pkt_build_message(md, mrim_flags, who, message, " ");
+    _send_out(md);
+
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, 
+                                _attempt_new(ATMP_MSG, who, message, mrim_flags));
+    purple_debug_info("mrim", "{%u} sending message to %s\n", who);
     return 0;
 }
 
@@ -1052,7 +1102,16 @@ mrim_set_info(PurpleConnection *gc, const char *info)
 unsigned int 
 mrim_send_typing(PurpleConnection *gc, const char *name, PurpleTypingState state)
 {
-    return 0;
+    MrimData *md = (MrimData*) gc->proto_data;
+    guint32 mrim_flags = MESSAGE_FLAG_NORECV|MESSAGE_FLAG_NOTIFY;
+    if (state = PURPLE_TYPING) {
+        mrim_pkt_build_message(md, mrim_flags, name, " ", " ");
+        _send_out(md);
+        return MRIM_TYPING_TIMEOUT;
+    }
+    else {
+        return 0;
+    }
 }
 
 /**
