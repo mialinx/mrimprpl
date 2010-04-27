@@ -445,7 +445,7 @@ _dispatch_user_info(MrimData *md, MrimPktUserInfo *pkt)
     const gchar *new_alias = g_hash_table_lookup(pkt->info, "MRIM.NICKNAME");
     
     for (item = g_hash_table_get_keys(pkt->info); item; item = g_list_next(item)) {
-        purple_debug_info("mrim", "user info '%s'='%s'\n", item->data, 
+        purple_debug_misc("mrim", "user info '%s'='%s'\n", item->data, 
                         g_hash_table_lookup(pkt->info, item->data));
     }
     g_list_free(g_list_first(item));
@@ -655,10 +655,11 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
                 purple_blist_add_group(group, NULL);
             }
             g_hash_table_replace(md->groups, g_strdup(mgroup->name), (gpointer) id);
+            purple_debug_info("mrim", "contact_list: group: [%u] %s\n", id, mgroup->name);
         }
         else {
-            /* do not remove groups as they can be used by another accounts */
-            g_hash_table_remove(md->groups, mgroup->name);
+            /* do not remove groups from pidgin blist as they may be used by another accounts */
+            purple_debug_info("mrim", "contact_list: group: [%u] %s [removed]\n", id, mgroup->name);
         }
     }
 
@@ -680,12 +681,15 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
             purple_prpl_got_user_status(md->account, contact->email, 
                                     _status_mrim2purple(contact->status), NULL);
             g_hash_table_replace(md->contacts, g_strdup(contact->email), (gpointer) id);
+            purple_debug_info("mrim", "contact_list: contact: [%u] %s (%s) group %u\n", 
+                                        id, contact->email, contact->nick, contact->group_id);
         }
         else {
             if (buddy = purple_find_buddy(md->account, contact->email)) {
                 purple_blist_remove_buddy(buddy);
             }
-            g_hash_table_remove(md->contacts, contact->email);
+            purple_debug_info("mrim", "contact_list: contact: [%u] %s (%s) group %u [removed]\n", 
+                                        id, contact->email, contact->nick, contact->group_id);
         }
     }
 
@@ -1232,6 +1236,9 @@ _mrim_group_buddy(MrimData *md, const gchar *name, const gchar *old_group, const
     
 }
 
+/* HACK: we can't find buddy by a name in blist during moving from group to group
+    so delay this operation till the end of moving */
+
 typedef struct {
     MrimData *md;
     const gchar *name;
@@ -1243,7 +1250,6 @@ static gboolean
 _mrim_group_buddy_sf(gpointer data)
 {
     MrimGroupBuddyArgs *args = (MrimGroupBuddyArgs*) data;
-fprintf(stderr, "CALL %s %s -> %s\n", args->name, args->old_group, args->new_group);
     _mrim_group_buddy(args->md, args->name, args->old_group, args->new_group);
     g_free(data); /* NEED copy args ? */
     return FALSE;
@@ -1253,14 +1259,15 @@ void
 mrim_group_buddy(PurpleConnection *gc, const gchar *name, 
                                         const gchar *old_group, const gchar *new_group)
 {
+    /*
+    _mrim_group_buddy((MrimData*) gc->proto_data, name, old_group, new_group);
+    */
     MrimGroupBuddyArgs *args = g_new0(MrimGroupBuddyArgs, 1);
     args->md = (MrimData*) gc->proto_data;
     args->name = name;
     args->old_group = old_group;
     args->new_group = new_group;
-fprintf(stderr, "PLAN %s %s -> %s\n", name, old_group, new_group);
     purple_timeout_add_seconds(0, _mrim_group_buddy_sf, args);
-//    _mrim_group_buddy((MrimData*) gc->proto_data, name, old_name, new_name);
 }
 
 /* Rename group on a server side */
@@ -1270,22 +1277,16 @@ _mrim_rename_group(MrimData *md, const gchar *old_name, const gchar *new_name)
     gint32 id;
     MrimAttempt atmp;
 
-fprintf(stderr, "2\n");
     if (!g_hash_table_lookup_extended(md->groups, old_name, NULL, (gpointer*) &id)) {
-fprintf(stderr, "3\n");
         purple_debug_info("mrim", "rename group: failed to find group in contact list for %s\n", 
                                         old_name);
         return;
     }
-fprintf(stderr, "4\n");
     mrim_pkt_build_modify_contact(md, id, CONTACT_FLAG_GROUP, 0, new_name, new_name);
-fprintf(stderr, "5\n");
     _send_out(md);
-fprintf(stderr, "6\n");
     g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, 
                                 _attempt_new(ATMP_MOD_GROUP, old_name, new_name));
 
-fprintf(stderr, "7\n");
     purple_debug_info("mrim", "{%u} renaming group %u from %s to %s\n", (guint) md->tx_seq,
                                 id, old_name, new_name);
 }
@@ -1293,7 +1294,6 @@ fprintf(stderr, "7\n");
 void 
 mrim_rename_group(PurpleConnection *gc, const char *old_name, PurpleGroup *group, GList *moved_buddies)
 {
-fprintf(stderr, "1\n");
     _mrim_rename_group((MrimData*) gc->proto_data, old_name, purple_group_get_name(group));
 }
 

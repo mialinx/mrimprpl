@@ -25,7 +25,7 @@ _str2lps(const gchar *str)
     data = g_convert_with_fallback(str, strlen(str), "WINDOWS-1251", local_charset, "?", 
                             NULL, &data_len, &err);
     if (!data) {
-        fprintf(stderr, "FAILED STR2LPS: bad encoding %s\n", err->message);
+        purple_debug_error("mrim", "_str2lps: bad encoding %s\n", err->message);
         return NULL;
     }
 
@@ -48,7 +48,7 @@ _lps2str(MrimPktLps *lps)
     str = g_convert_with_fallback(lps->data, lps->length, local_charset, "WINDOWS-1251", "?",
                             NULL, &str_len, &err);
     if (!str) {
-        fprintf(stderr, "FAILED STR2LPS: bad encoding %s\n", err->message);
+        purple_debug_error("mrim", "_lps2str: bad encoding %s\n", err->message);
         return NULL;
     }
 
@@ -577,7 +577,7 @@ _parse_contact_list(MrimData *md, MrimPktHeader *pkt)
          group->name = _read_lps(pkt, &pos);
          loc->groups = g_list_append(loc->groups, group);
          if (!_skip_by_mask(pkt, &pos, group_mask + 2)) {
-            fprintf(stderr, "WARN: wrong pkt content\n");
+            purple_debug_error("mrim", "parse_contact_list: wrong pkt content\n");
          }
     }
     loc->groups = g_list_first(loc->groups);
@@ -592,7 +592,7 @@ _parse_contact_list(MrimData *md, MrimPktHeader *pkt)
         contact->status = _read_ul(pkt, &pos);
         loc->contacts = g_list_append(loc->contacts, contact);
         if (!_skip_by_mask(pkt, &pos, contact_mask + 6)) {
-            fprintf(stderr, "WARN: wrong pkt content\n");
+            purple_debug_error("mrim", "parse_contact_list: wrong pkt content\n");
         }
     }
     loc->contacts = g_list_first(loc->contacts);
@@ -689,8 +689,9 @@ mrim_pkt_parse(MrimData *md)
     if (!(pkt = _collect(md))) {
         return NULL;
     }
-
-fprintf(stderr, "parsing 0x%08x\n", GUINT32_FROM_LE(pkt->msg));
+    
+    purple_debug_misc("mrim", "mrim_pkt_parse: packet received 0x%08x\n", 
+                    GUINT32_FROM_LE(pkt->msg));
 
     switch (GUINT32_FROM_LE(pkt->msg)) {
         case MRIM_CS_HELLO_ACK:
