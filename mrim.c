@@ -1026,6 +1026,14 @@ mrim_close(PurpleConnection *gc)
 int
 mrim_send_im(PurpleConnection *gc, const char *who, const char *message, PurpleMessageFlags flags)
 {
+    MrimData *md = (MrimData*) gc->proto_data;
+    guint32 id;
+
+    if (!g_hash_table_lookup_extended(md->contacts, who, NULL (gpointer*) &id)) {
+        purple_debug_error("mrim", "send_im: failed to find mrim contact for %s\n", who);
+        return;
+    }
+
     return 0;
 }
 
