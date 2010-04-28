@@ -1,4 +1,4 @@
-/* config.h.in.  Generated from configure.ac by autoheader.  */
+/* src/config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* if Mrim debug enabled */
 #undef ENABLE_MRIM_DEBUG

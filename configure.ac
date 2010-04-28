@@ -1,10 +1,13 @@
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ([2.65])
 AC_INIT([mrimprpl], [0.1], [mialinx@gmail.com])
+AC_CONFIG_SRCDIR([src/proto.h])
+AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_AUX_DIR([build-aux])
-AC_CONFIG_SRCDIR([proto.h])
-AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_HEADERS([src/config.h])
 AM_INIT_AUTOMAKE([mrimprpl], [0.1])
+libdir='${exec_prefix}/lib/purple-2'
+AC_SUBST(libdir)
 
 # Checks for programs.
 AC_PROG_CC
@@ -44,4 +47,4 @@ AC_ARG_ENABLE([mrim-debug], [
 ])
 
 # Checks for library functions.
-AC_OUTPUT([Makefile])
+AC_OUTPUT([Makefile src/Makefile img/Makefile])

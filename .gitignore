@@ -1,8 +1,9 @@
 Makefile
 libtool
-config.h
+src/config.h
 config.status
 config.log
+stamp-h1
 autom4te.cache
 autom4te.cache/*
 .deps
