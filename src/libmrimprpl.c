@@ -4,8 +4,8 @@
 #include "mrim.h"
 
 #define MRIMPRPL_ID "prpl-mialinx-mrim"
-#define MRIMPRPL_NAME "Mail.Ru protocol"
-#define MRIMPRPL_VERSION "1.0"
+#define MRIMPRPL_NAME "Mail.Ru Agent"
+#define MRIMPRPL_VERSION "0.1"
 #define MRIMPRPL_AUTHOR "Dmitry Smal <mialinx@gmail.com>"
 #define MRIMPRPL_WEBSITE ""
 #define MRIMPRPL_SUMMARY "Mail.Ru agent protocol support plugin"
@@ -142,4 +142,4 @@ init_plugin(PurplePlugin *plugin)
     */
 }
 
-PURPLE_INIT_PLUGIN(hello_world, init_plugin, info)
+PURPLE_INIT_PLUGIN(mrimprpl, init_plugin, info)
