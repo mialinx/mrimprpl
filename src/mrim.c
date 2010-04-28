@@ -183,17 +183,8 @@ mrim_list_icon(PurpleAccount *account, PurpleBuddy *buddy)
 const char *
 mrim_list_emblem(PurpleBuddy *buddy)
 {
+    /* TODO create images and logic for 'not-authorized' */
     return "emblem";
-}
-
-/*
- * Gets a short string representing this buddy's status.  This will
- * be shown on the buddy list.
- */
-char *
-mrim_status_text(PurpleBuddy *buddy)
-{
-    return g_strdup(buddy->name);
 }
 
 /*

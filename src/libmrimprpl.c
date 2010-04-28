@@ -18,7 +18,7 @@ static PurplePluginProtocolInfo protocol_info = {
     NO_BUDDY_ICONS,         /* PurpleBuddyIconSpec: no icons for now */
     mrim_list_icon,         /* (MUST) returns list icon name */
     mrim_list_emblem,       /* returns emblem test.. something like type of client.. not-authorized for eg */
-    mrim_status_text,       /* returns a short string representing this buddy's status */
+    NULL,                   /* returns a short string representing this buddy's status */
     mrim_tooltip_text,      /* allows the prpl to add text to a buddy's tooltip */
     mrim_status_types,      /* (MUST) returns a list of #PurpleStatusType which exist for this account */
     mrim_blist_node_menu,   /* returns a list of #PurpleMenuAction structs, which represent extra 
