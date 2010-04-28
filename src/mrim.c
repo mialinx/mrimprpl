@@ -1070,16 +1070,17 @@ mrim_send_im(PurpleConnection *gc, const char *who, const char *message, PurpleM
     MrimData *md = (MrimData*) gc->proto_data;
     guint32 id;
     guint32 mrim_flags = 0;
+    gchar *clean = NULL;
 
     if (!g_hash_table_lookup_extended(md->contacts, who, NULL, (gpointer*) &id)) {
         purple_debug_error("mrim", "send_im: failed to find mrim contact for %s\n", who);
         return;
     }
 
-    message = strlen(message) > 0 ? message : " ";
-fprintf(stderr, "%s\n", message);
-    mrim_pkt_build_message(md, mrim_flags, who, message, " ");
+    clean = purple_unescape_html(strlen(message) > 0 ? message : " ");
+    mrim_pkt_build_message(md, mrim_flags, who, clean, " ");
     _send_out(md);
+    g_free(clean);
 
     g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, 
                                 _attempt_new(ATMP_MSG, who, message, mrim_flags));
