@@ -1,9 +1,11 @@
 #include <glib.h>
 #include <string.h>
 #include "pkt.h"
+#include "cl.h"
 
 /* Common utils */
 
+#define MAX_GROUP 20
 #define PKT_LEN(pkt) (GUINT32_FROM_LE(pkt->dlen) + sizeof(MrimPktHeader))
 #define LPS_LEN(lps) (GUINT32_FROM_LE((lps)->length) + sizeof((lps)->length))
 
@@ -576,8 +578,11 @@ static MrimPktContactList*
 _parse_contact_list(MrimData *md, MrimPktHeader *pkt)
 {
     MrimPktContactList *loc = NULL;
-    guint32 pos = 0, groups_count = 0, i = 0, j = 0;
+    guint32 pos = 0, groups_count = 0, id = 0;
     gchar *group_mask = NULL, *contact_mask = NULL;
+
+    guint32 group_id = 0, flags = 0, server_flags = 0, status = 0;
+    gchar *name = NULL, *nick = NULL;
     MrimGroup *group = NULL;
     MrimContact *contact = NULL;
     
@@ -588,10 +593,11 @@ _parse_contact_list(MrimData *md, MrimPktHeader *pkt)
     group_mask = _read_lps(pkt, &pos);
     contact_mask = _read_lps(pkt, &pos);
 
-    for (i = 0; i < groups_count; i++) {
-         group = g_new0(MrimGroup, 1);
-         group->flags = _read_ul(pkt, &pos);
-         group->name = _read_lps(pkt, &pos);
+    for (id = 0; id < groups_count; id++) {
+         flags = _read_ul(pkt, &pos);
+         name = _read_lps(pkt, &pos);
+         MrimGroup *group = mrim_group_new(id, flags, name);
+         g_free(name);
          loc->groups = g_list_append(loc->groups, group);
          if (!_skip_by_mask(pkt, &pos, group_mask + 2)) {
             purple_debug_error("mrim", "parse_contact_list: wrong pkt content\n");
@@ -599,14 +605,17 @@ _parse_contact_list(MrimData *md, MrimPktHeader *pkt)
     }
     loc->groups = g_list_first(loc->groups);
 
-    while (pos < loc->header.dlen) {
-        contact = g_new0(MrimContact, 1);
-        contact->flags = _read_ul(pkt, &pos);
-        contact->group_id = _read_ul(pkt, &pos);
-        contact->email = _read_lps(pkt, &pos);
-        contact->nick = _read_lps(pkt, &pos);
-        contact->server_flags = _read_ul(pkt, &pos);
-        contact->status = _read_ul(pkt, &pos);
+    for (id = 0; pos < loc->header.dlen; id++) {
+        flags = _read_ul(pkt, &pos);
+        group_id = _read_ul(pkt, &pos);
+        name = _read_lps(pkt, &pos);
+        nick = _read_lps(pkt, &pos);
+        server_flags = _read_ul(pkt, &pos);
+        status = _read_ul(pkt, &pos);
+        contact = mrim_contact_new(MAX_GROUP + id, flags, server_flags, status,
+                                    group_id, name, nick);
+        g_free(name);
+        g_free(nick);
         loc->contacts = g_list_append(loc->contacts, contact);
         if (!_skip_by_mask(pkt, &pos, contact_mask + 6)) {
             purple_debug_error("mrim", "parse_contact_list: wrong pkt content\n");
@@ -622,27 +631,8 @@ _parse_contact_list(MrimData *md, MrimPktHeader *pkt)
 static void
 _free_contact_list(MrimPktContactList *loc)
 {
-    MrimGroup *group = NULL;
-    MrimContact *contact = NULL;
-    GList *node = NULL;
-
-    node = g_list_first(loc->groups);
-    while (node) {
-        group = (MrimGroup *) node->data;
-        g_free(group->name);
-        g_free(group);
-        node = g_list_next(node);
-    }
+    /* groups and contacts should be freed in main code */
     g_list_free(loc->groups);
-
-    node = g_list_first(loc->contacts);
-    while (node) {
-        contact = (MrimContact *) node->data;
-        g_free(contact->email);
-        g_free(contact->nick);
-        g_free(contact);
-        node = g_list_next(node);
-    }
     g_list_free(loc->contacts);
     g_free(loc);
 }

@@ -86,9 +86,6 @@ void
 mrim_set_idle(PurpleConnection *gc, int idletime);
 
 void
-mrim_change_passwd(PurpleConnection *gc, const char *old_pass, const char *new_pass);
-
-void
 mrim_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group);
 
 void

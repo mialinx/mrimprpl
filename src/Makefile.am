@@ -4,6 +4,8 @@ MRIM_SOURCES = \
     mrim.c \
     pkt.h \
     pkt.c \
+    cl.h \
+    cl.c \
     libmrimprpl.c
 
 lib_LTLIBRARIES = libmrimprpl.la

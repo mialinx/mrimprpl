@@ -81,20 +81,6 @@ typedef struct {
 } MrimPktContactList;
 
 typedef struct {
-    guint32 flags;
-    gchar *name;
-} MrimGroup;
-
-typedef struct {
-    guint32 flags;
-    guint32 group_id;
-    gchar *email;
-    gchar *nick;
-    guint32 server_flags;
-    guint32 status;
-} MrimContact;
-
-typedef struct {
     MrimPktHeader header;
     guint32 status;
     gchar *email;

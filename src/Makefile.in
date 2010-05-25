@@ -72,7 +72,7 @@ am__DEPENDENCIES_1 =
 libmrimprpl_la_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1)
 am__objects_1 = libmrimprpl_la-mrim.lo libmrimprpl_la-pkt.lo \
-	libmrimprpl_la-libmrimprpl.lo
+	libmrimprpl_la-cl.lo libmrimprpl_la-libmrimprpl.lo
 am_libmrimprpl_la_OBJECTS = $(am__objects_1)
 libmrimprpl_la_OBJECTS = $(am_libmrimprpl_la_OBJECTS)
 libmrimprpl_la_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) \
@@ -218,6 +218,8 @@ MRIM_SOURCES = \
     mrim.c \
     pkt.h \
     pkt.c \
+    cl.h \
+    cl.c \
     libmrimprpl.c
 
 lib_LTLIBRARIES = libmrimprpl.la
@@ -316,6 +318,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libmrimprpl_la-cl.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libmrimprpl_la-libmrimprpl.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libmrimprpl_la-mrim.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libmrimprpl_la-pkt.Plo@am__quote@
@@ -354,6 +357,13 @@ libmrimprpl_la-pkt.lo: pkt.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='pkt.c' object='libmrimprpl_la-pkt.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libmrimprpl_la_CFLAGS) $(CFLAGS) -c -o libmrimprpl_la-pkt.lo `test -f 'pkt.c' || echo '$(srcdir)/'`pkt.c
+
+libmrimprpl_la-cl.lo: cl.c
+@am__fastdepCC_TRUE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libmrimprpl_la_CFLAGS) $(CFLAGS) -MT libmrimprpl_la-cl.lo -MD -MP -MF $(DEPDIR)/libmrimprpl_la-cl.Tpo -c -o libmrimprpl_la-cl.lo `test -f 'cl.c' || echo '$(srcdir)/'`cl.c
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/libmrimprpl_la-cl.Tpo $(DEPDIR)/libmrimprpl_la-cl.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='cl.c' object='libmrimprpl_la-cl.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libmrimprpl_la_CFLAGS) $(CFLAGS) -c -o libmrimprpl_la-cl.lo `test -f 'cl.c' || echo '$(srcdir)/'`cl.c
 
 libmrimprpl_la-libmrimprpl.lo: libmrimprpl.c
 @am__fastdepCC_TRUE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libmrimprpl_la_CFLAGS) $(CFLAGS) -MT libmrimprpl_la-libmrimprpl.lo -MD -MP -MF $(DEPDIR)/libmrimprpl_la-libmrimprpl.Tpo -c -o libmrimprpl_la-libmrimprpl.lo `test -f 'libmrimprpl.c' || echo '$(srcdir)/'`libmrimprpl.c
