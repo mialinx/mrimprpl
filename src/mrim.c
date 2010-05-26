@@ -1196,7 +1196,7 @@ _mrim_add_buddy(MrimData *md, const gchar *name, const gchar *group_name)
 {
     PurpleBuddy *buddy = NULL;
     MrimContact *contact = NULL;
-    MrimAttemp *atmp = NULL;
+    MrimAttempt *atmp = NULL;
     MrimGroup *group = NULL;
     
     if (!g_hash_table_lookup_extended(md->groups, group_name, NULL, (gpointer*) &group)) {
@@ -1241,7 +1241,7 @@ static void
 _mrim_remove_buddy(MrimData *md, const gchar* name)
 {
     MrimContact *contact = NULL;
-    MrimAttemp *atmp = NULL;
+    MrimAttempt *atmp = NULL;
 
     if (!g_hash_table_lookup_extended(md->contacts, name, NULL, (gpointer*) &contact)) {
         purple_debug_error("mrim", "remove buddy: failed to find mrim contact for %s\n", name);
@@ -1332,7 +1332,7 @@ static void
 _mrim_rename_group(MrimData *md, const gchar *old_name, const gchar *new_name)
 {
     MrimGroup *group = NULL;
-    MrimAttemp *atmp = NULL;
+    MrimAttempt *atmp = NULL;
 
     if (!g_hash_table_lookup_extended(md->groups, old_name, NULL, (gpointer*) &group)) {
         purple_debug_info("mrim", "rename group: failed to find group in contact list for %s\n", 
