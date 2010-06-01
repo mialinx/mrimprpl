@@ -29,7 +29,7 @@ static PurplePluginProtocolInfo protocol_info = {
     mrim_login,             /* performs login */
     mrim_close,             /* performs logout */
     mrim_send_im,           /* sends istant message */
-    mrim_set_info,          /* set's self user info */
+    NULL,                   /* set's self user info */
     mrim_send_typing,       /* send 'typing..' notification */
     mrim_get_info,          /* retriev user info */
     mrim_set_status,        /* set status */

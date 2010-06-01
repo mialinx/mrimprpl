@@ -9,6 +9,28 @@
 #define MRIMPRPL_BALANCER_DEFAULT_PORT 2042
 #define MRIMPRPL_BALANCER_DEFAULT_HOST "mrim.mail.ru"
 
+typedef struct {
+    guint32 id;
+    guint32 flags;
+    gchar *name;
+} MrimGroup;
+
+typedef struct {
+    guint32 id;
+    guint32 flags;
+    guint32 server_flags;
+    guint32 status;
+    guint32 group_id;
+    gchar *name;
+    gchar *nick;
+} MrimContact;
+
+MrimGroup*
+mrim_group_new(const guint32 id, const guint32 flags, const gchar *name);
+
+MrimContact*
+mrim_contact_new(const guint32 id, const guint32 flags, const guint32 server_flags, 
+            const guint32 status, const guint32 group_id, const gchar *name, const gchar *nick);
 
 typedef struct {
 
@@ -30,7 +52,7 @@ typedef struct {
         guint read_handle;
         guint write_handle;
         PurpleCircBuffer *rx_buf;
-        GString *rx_pkt_buf; /* linear rx buffer for one packet */
+        GString *rx_pkt_buf;
         PurpleCircBuffer *tx_buf;
     } server;
 

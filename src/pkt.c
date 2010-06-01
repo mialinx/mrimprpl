@@ -1,7 +1,6 @@
 #include <glib.h>
 #include <string.h>
 #include "pkt.h"
-#include "cl.h"
 
 /* Common utils */
 
@@ -247,6 +246,23 @@ mrim_pkt_build_message(MrimData *md, guint32 flags, const gchar *to,
 }
 
 void
+mrim_pkt_build_authorize(MrimData *md, const gchar *email)
+{
+    MrimPktHeader header;
+    MrimPktLps *lps_email = NULL;
+
+    if (!(lps_email = _str2lps(email))) {
+        return;
+    }
+    _init_header(&header, ++md->tx_seq, MRIM_CS_AUTHORIZE, LPS_LEN(lps_email));
+
+    purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
+    purple_circ_buffer_append(md->server.tx_buf, lps_email, LPS_LEN(lps_email));
+
+    g_free(lps_email);
+}
+
+void
 mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id)
 {
     MrimPktHeader header;
@@ -263,23 +279,6 @@ mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id)
     purple_circ_buffer_append(md->server.tx_buf, &msg_id, sizeof(msg_id));
 
     g_free(lps_from);
-}
-
-void
-mrim_pkt_build_authorize(MrimData *md, gchar *email)
-{
-    MrimPktHeader header;
-    MrimPktLps *lps_email = NULL;
-
-    if (!(lps_email = _str2lps(email))) {
-        return;
-    }
-    _init_header(&header, ++md->tx_seq, MRIM_CS_AUTHORIZE, LPS_LEN(lps_email));
-
-    purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
-    purple_circ_buffer_append(md->server.tx_buf, lps_email, LPS_LEN(lps_email));
-
-    g_free(lps_email);
 }
 
 /* Server to Client messages */

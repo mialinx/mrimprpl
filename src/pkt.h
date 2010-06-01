@@ -41,7 +41,7 @@ void
 mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id);
 
 void
-mrim_pkt_build_authorize(MrimData *md, gchar *email);
+mrim_pkt_build_authorize(MrimData *md, const gchar *email);
 
 /* Server to Client messages */
 typedef struct {
