@@ -810,6 +810,11 @@ _mrim_request_authorization_cb(gpointer ptr, gchar *message)
 static void
 _mrim_request_authorization_dialog(MrimData *md, const gchar *name)
 {
+    /* Note: this version of protocol does not support custom
+    authorization messages. So we will not show the dialog.
+    We will send auth request directly and show notification */
+
+    /*
     purple_request_input(md->account->gc, 
         "Requesting authorization", 
         "Enter message for request authorization", 
@@ -827,6 +832,12 @@ _mrim_request_authorization_dialog(MrimData *md, const gchar *name)
         NULL,
         _mrim_auth_params_new(md, name)
     );
+    */
+
+     gchar *msg = g_strdup_printf("Request was sent to %s", name);
+    _mrim_send_message(md, name, " ", MESSAGE_FLAG_AUTHORIZE);
+    purple_notify_info(md->account->gc, "Authorization", msg, NULL);
+    g_free(msg);
 }
 
 static void
@@ -1076,6 +1087,7 @@ _dispatch_message_ack(MrimData *md, MrimPktMessageAck *pkt)
     PurpleConvIm *conv_im = NULL;
     MrimContact *contact = NULL;
     MrimAuthParams *auth_params = NULL;
+    gchar *clean = NULL;
 
     purple_debug_info("mrim", "message from %s flags 0x%08x\n", pkt->from, (guint) pkt->flags);
 
@@ -1102,7 +1114,9 @@ _dispatch_message_ack(MrimData *md, MrimPktMessageAck *pkt)
             conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, pkt->from);
         }
         purple_conversation_set_name(conv, pkt->from);
-        purple_conversation_write(conv, pkt->from, pkt->message, PURPLE_MESSAGE_RECV, time(NULL));
+        clean = purple_markup_escape_text(pkt->message, -1);
+        purple_conversation_write(conv, pkt->from, clean, PURPLE_MESSAGE_RECV, time(NULL));
+        g_free(clean);
     }
 
     if (!(pkt->flags & MESSAGE_FLAG_NORECV)) {
@@ -1158,7 +1172,7 @@ _dispatch_message_status(MrimData *md, MrimPktMessageStatus *pkt)
     }
 
     if (pkt->status == MESSAGE_DELIVERED) {
-        if (atmp->message.flags & noecho_flags) {
+        if (!(atmp->message.flags & noecho_flags)) {
             conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, atmp->message.name, md->account);
             if (!conv) {
                 conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, atmp->message.name);
@@ -1388,7 +1402,7 @@ _dispatch_authorize_ack(MrimData *md, MrimPktAuthorizeAck *pkt)
 
     if (g_hash_table_lookup_extended(md->contacts, pkt->email, NULL, (gpointer*) &contact)) {
         contact->server_flags &= !CONTACT_INTFLAG_NOT_AUTHORIZED;
-        msg = g_strdup_printf("You were authorized by %s", contact->nick ? contact->nick : contact->name);
+        msg = g_strdup_printf("You were authorized by %s", contact->name);
         purple_notify_info(md->account->gc, "Authorization", msg, NULL);
         g_free(msg);
     }
@@ -1484,10 +1498,10 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
             else {
                 group = NULL;
             }
+            g_hash_table_replace(md->contacts, contact->name, contact);
             purple_blist_add_buddy(buddy, NULL, group, NULL);
             purple_prpl_got_user_status(md->account, contact->name, 
                                     _status_mrim2purple(contact->status), NULL);
-            g_hash_table_replace(md->contacts, contact->name, contact);
             purple_debug_info("mrim", "contact_list: contact: [%u] %s (%s) [group %u flags %u server flags %u]\n", 
                                         contact->id, contact->name, contact->nick, contact->group_id, 
                                         contact->flags, contact->server_flags);
