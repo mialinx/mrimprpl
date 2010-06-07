@@ -41,6 +41,9 @@ void
 mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id);
 
 void
+mrim_pkt_build_offline_message_del(MrimData *md, gchar *uidl);
+
+void
 mrim_pkt_build_authorize(MrimData *md, const gchar *email);
 
 /* Server to Client messages */
@@ -105,6 +108,15 @@ typedef struct {
     gchar *message;
     gchar *rtf_message;
 } MrimPktMessageAck;
+
+typedef struct {
+    MrimPktHeader header;
+    gchar *uidl;
+    guint32 flags;
+    gchar *from;
+    gchar *message;
+    gchar *rtf_message;
+} MrimPktOfflineMessageAck;
 
 typedef struct {
     MrimPktHeader header;

@@ -5,6 +5,7 @@
 /* Common utils */
 
 #define MAX_GROUP 20
+#define UIDL_LEN 8
 #define PKT_LEN(pkt) (GUINT32_FROM_LE(pkt->dlen) + sizeof(MrimPktHeader))
 #define LPS_LEN(lps) (GUINT32_FROM_LE((lps)->length) + sizeof((lps)->length))
 
@@ -281,6 +282,17 @@ mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id)
     g_free(lps_from);
 }
 
+void
+mrim_pkt_build_offline_message_del(MrimData *md, gchar *uidl)
+{
+    MrimPktHeader header;
+
+    _init_header(&header, ++md->tx_seq, MRIM_CS_DELETE_OFFLINE_MESSAGE, UIDL_LEN);
+
+    purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
+    purple_circ_buffer_append(md->server.tx_buf, uidl, UIDL_LEN);
+}
+
 /* Server to Client messages */
 
 /* Collect bytes in rx_pkt_buf for just one packet 
@@ -384,8 +396,7 @@ _read_str(MrimPktHeader *pkt, guint32 *pos)
 static void
 _skip_str(MrimPktHeader *pkt, guint32 *pos)
 {
-    gchar *str = g_strdup(((gchar*)pkt) + *pos);
-    *pos += strlen(str);
+    *pos += strlen((gchar*)pkt + *pos + 1);
 }
 
 static gboolean
@@ -411,6 +422,14 @@ _skip_by_mask(MrimPktHeader *pkt, guint32 *pos, gchar *mask)
     return TRUE;
 }
 
+static gchar*
+_read_uidl(MrimPktHeader *pkt, guint32 *pos)
+{
+    gchar *uidl = g_strndup((gchar*)pkt + *pos, UIDL_LEN);
+    *pos += UIDL_LEN;
+    return uidl;
+}
+    
 /* particular packets */
 
 static MrimPktHelloAck*
@@ -465,6 +484,92 @@ _parse_message_ack(MrimData *md, MrimPktHeader *pkt)
     loc->from = _read_lps(pkt, &pos);
     loc->message = _read_lps(pkt, &pos);
     loc->rtf_message = _read_lps(pkt, &pos);
+    return loc;
+}
+
+
+static MrimPktOfflineMessageAck*
+_parse_offline_message_ack(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    gchar *mail = NULL, *p = NULL, *k = NULL, *v = NULL, *ks = NULL, *boundary = NULL;
+    enum {KEY_SKAN, WHITE_SKIP, VAL_SKAN, BODY, STOP} state;
+
+    MrimPktOfflineMessageAck *loc = g_new0(MrimPktOfflineMessageAck, 1);
+    _read_header(pkt, &loc->header, &pos);
+    loc->uidl = _read_uidl(pkt, &pos);
+    mail = _read_lps(pkt, &pos);
+
+fprintf(stderr, "=======\n%s\n============\n", mail);
+    /* parse offline message content */
+    for (p = k = mail, state = KEY_SKAN; *p && state != STOP; p++) {
+fprintf(stderr, "state %s char '%c'\n", state == KEY_SKAN ? "KEY_SKAN" : state == WHITE_SKIP ? "WHITE_SKIP" : state == VAL_SKAN ? "VAL_SKAN" : state == BODY ? "BODY" : "STOP", *p);
+fprintf(stderr, "\tp=%p\tk=%p\tks=%p\tv=%p\n", p, k, ks, v);
+        switch (state) {
+            KEY_SKAN:
+                /* reading header key */
+                if (*p == ':') {
+                    ks = p;
+                    state = WHITE_SKIP;
+                }
+                else if (*p == '\n') {
+                    state = BODY;
+                }
+                break;
+            WHITE_SKIP:
+                /* skipping white spaces before value */
+                if (*p != ' ' && *p != '\t') {
+                    v = p;
+                    state = VAL_SKAN;
+                }
+                break;
+            VAL_SKAN:
+                /* reading header value */
+                if (*p == '\n') {
+                    if (0 == g_ascii_strncasecmp(k, "From", ks - k)) {
+                        loc->from = g_strndup(v, p - v);
+                    }
+                    else if (0 == g_ascii_strncasecmp(k, "Boundary", ks - k)) {
+                        boundary = g_strndup(v, p - v);
+                    }
+                    else if (0 == g_ascii_strncasecmp(k, "X-MRIM-Flags", ks - k)) {
+                        loc->flags = (guint32) atol(v);
+                    }
+                    else if (0 == g_ascii_strncasecmp(k, "Date", ks - k)) {
+                        // ?
+                    }
+                    state = KEY_SKAN;
+                    k = p + 1;
+                }
+                break;
+            BODY:
+                if (boundary) {
+                    if (v = g_strstr_len(p, -1, boundary)) {
+                        loc->message = g_strndup(p, v - p);
+                        p = v + strlen(boundary);
+                        if (v = g_strstr_len(p, -1, boundary)) {
+                            loc->rtf_message = g_strndup(p, v - p);
+                        }
+                        else {
+                            loc->rtf_message = g_strdup(p);
+                        }
+                    }
+                    else {
+                        loc->message = g_strdup(p);
+                    }
+                }
+                state = STOP;
+                break;
+            STOP:
+                break;
+        }
+    }
+fprintf(stderr, "Boudary '%s'\n", boundary);
+fprintf(stderr, "from '%s'\n", loc->from);
+fprintf(stderr, "Message '%s'\n", loc->message);
+fprintf(stderr, "RTF '%s'\n", loc->rtf_message);
+    g_free(boundary);
+    g_free(mail);
     return loc;
 }
 
@@ -734,6 +839,7 @@ mrim_pkt_parse(MrimData *md)
             loc = (MrimPktHeader*) _parse_modify_contact_ack(md, pkt);
             break;
         case MRIM_CS_OFFLINE_MESSAGE_ACK:
+            loc = (MrimPktHeader*) _parse_offline_message_ack(md, pkt);
             break;
         case MRIM_CS_AUTHORIZE_ACK:
             loc = (MrimPktHeader*) _parse_authorize_ack(md, pkt);
