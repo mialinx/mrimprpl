@@ -6,6 +6,7 @@
 #include "proto.h"
 
 typedef mrim_packet_header_t MrimPktHeader;
+typedef gchar* Uidl;
 
 /* Common routines */
 void
@@ -41,7 +42,7 @@ void
 mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id);
 
 void
-mrim_pkt_build_offline_message_del(MrimData *md, gchar *uidl);
+mrim_pkt_build_offline_message_del(MrimData *md, Uidl uidl);
 
 void
 mrim_pkt_build_authorize(MrimData *md, const gchar *email);
@@ -111,8 +112,9 @@ typedef struct {
 
 typedef struct {
     MrimPktHeader header;
-    gchar *uidl;
+    Uidl uidl;
     guint32 flags;
+    time_t time;
     gchar *from;
     gchar *message;
     gchar *rtf_message;

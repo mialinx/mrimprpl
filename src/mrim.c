@@ -1395,6 +1395,42 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
 }
 
 static void
+_dispatch_offline_message_ack(MrimData *md, MrimPktOfflineMessageAck* pkt)
+{
+    PurpleConversation *conv = NULL;
+    PurpleConvIm *conv_im = NULL;
+    MrimContact *contact = NULL;
+    MrimAuthParams *auth_params = NULL;
+    gchar *clean = NULL;
+
+    purple_debug_info("mrim", "offline message from %s flags 0x%08x\n", pkt->from, (guint) pkt->flags);
+
+    if (pkt->flags & MESSAGE_FLAG_AUTHORIZE) {
+        if (!g_hash_table_lookup_extended(md->contacts, pkt->from, NULL, (gpointer*) &contact)) {
+            contact = NULL;
+        }
+        auth_params = _mrim_auth_params_new(md, pkt->from);
+        purple_account_request_authorization(md->account, pkt->from, NULL, contact ? contact->nick : NULL, 
+                    pkt->message, contact ? TRUE : FALSE, _mrim_authorize_cb, NULL, auth_params);
+    }
+    else {
+        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, pkt->from, md->account);
+        if (!conv) {
+            conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, pkt->from);
+        }
+        purple_conversation_set_name(conv, pkt->from);
+        clean = purple_markup_escape_text(pkt->message, -1);
+        purple_conversation_write(conv, pkt->from, clean, PURPLE_MESSAGE_RECV, pkt->time);
+        g_free(clean);
+    }
+
+    if (!(pkt->flags & MESSAGE_FLAG_NORECV)) {
+        mrim_pkt_build_offline_message_del(md, pkt->uidl);
+        _send_out(md);
+    }
+}
+
+static void
 _dispatch_authorize_ack(MrimData *md, MrimPktAuthorizeAck *pkt)
 {
     MrimContact *contact = NULL;
@@ -1552,6 +1588,7 @@ _dispatch(MrimData *md, MrimPktHeader *pkt)
             _dispatch_modify_contact_ack(md, (MrimPktModifyContactAck*) pkt);
             break;
         case MRIM_CS_OFFLINE_MESSAGE_ACK:
+            _dispatch_offline_message_ack(md, (MrimPktOfflineMessageAck*) pkt);
             break;
         case MRIM_CS_AUTHORIZE_ACK:
             _dispatch_authorize_ack(md, (MrimPktAuthorizeAck*) pkt);

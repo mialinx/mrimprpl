@@ -1,5 +1,6 @@
 #include <glib.h>
 #include <string.h>
+#include <locale.h>
 #include "pkt.h"
 
 /* Common utils */
@@ -283,7 +284,7 @@ mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id)
 }
 
 void
-mrim_pkt_build_offline_message_del(MrimData *md, gchar *uidl)
+mrim_pkt_build_offline_message_del(MrimData *md, Uidl uidl)
 {
     MrimPktHeader header;
 
@@ -422,10 +423,11 @@ _skip_by_mask(MrimPktHeader *pkt, guint32 *pos, gchar *mask)
     return TRUE;
 }
 
-static gchar*
+static Uidl
 _read_uidl(MrimPktHeader *pkt, guint32 *pos)
 {
-    gchar *uidl = g_strndup((gchar*)pkt + *pos, UIDL_LEN);
+    Uidl uidl = g_malloc0(UIDL_LEN);
+    memcpy(uidl, (gchar*)pkt + *pos, UIDL_LEN);
     *pos += UIDL_LEN;
     return uidl;
 }
@@ -500,13 +502,18 @@ _parse_offline_message_ack(MrimData *md, MrimPktHeader *pkt)
     loc->uidl = _read_uidl(pkt, &pos);
     mail = _read_lps(pkt, &pos);
 
-fprintf(stderr, "=======\n%s\n============\n", mail);
     /* parse offline message content */
     for (p = k = mail, state = KEY_SKAN; *p && state != STOP; p++) {
-fprintf(stderr, "state %s char '%c'\n", state == KEY_SKAN ? "KEY_SKAN" : state == WHITE_SKIP ? "WHITE_SKIP" : state == VAL_SKAN ? "VAL_SKAN" : state == BODY ? "BODY" : "STOP", *p);
-fprintf(stderr, "\tp=%p\tk=%p\tks=%p\tv=%p\n", p, k, ks, v);
+        /* DEBUG
+        fprintf(stderr, "state %s char '%c'\n", state == KEY_SKAN ? "KEY_SKAN" : 
+                                                state == WHITE_SKIP ? "WHITE_SKIP" : 
+                                                state == VAL_SKAN ? "VAL_SKAN" : 
+                                                state == BODY ? "BODY" : "STOP", 
+                                                *p);
+        fprintf(stderr, "\tp=%p\tk=%p\tks=%p\tv=%p\n", p, k, ks, v);
+        */
         switch (state) {
-            KEY_SKAN:
+            case KEY_SKAN:
                 /* reading header key */
                 if (*p == ':') {
                     ks = p;
@@ -516,33 +523,42 @@ fprintf(stderr, "\tp=%p\tk=%p\tks=%p\tv=%p\n", p, k, ks, v);
                     state = BODY;
                 }
                 break;
-            WHITE_SKIP:
+            case WHITE_SKIP:
                 /* skipping white spaces before value */
                 if (*p != ' ' && *p != '\t') {
                     v = p;
                     state = VAL_SKAN;
                 }
                 break;
-            VAL_SKAN:
+            case VAL_SKAN:
                 /* reading header value */
                 if (*p == '\n') {
                     if (0 == g_ascii_strncasecmp(k, "From", ks - k)) {
                         loc->from = g_strndup(v, p - v);
                     }
                     else if (0 == g_ascii_strncasecmp(k, "Boundary", ks - k)) {
-                        boundary = g_strndup(v, p - v);
+                        gchar *boundary_tmp = g_strndup(v, p - v);
+                        boundary = g_strdup_printf("--%s--", boundary_tmp);
+                        g_free(boundary_tmp);
                     }
                     else if (0 == g_ascii_strncasecmp(k, "X-MRIM-Flags", ks - k)) {
                         loc->flags = (guint32) atol(v);
                     }
                     else if (0 == g_ascii_strncasecmp(k, "Date", ks - k)) {
-                        // ?
+                        gchar *date = strndup(v, p - v);
+                        gchar *oldlocale = setlocale(LC_TIME, NULL);
+                        struct tm tm;
+                        setlocale(LC_TIME, "C");
+                        strptime(date, "%a, %d %b %Y %H:%M:%S", &tm);
+                        setlocale(LC_TIME, oldlocale);
+                        loc->time = mktime(&tm);
+                        g_free(date);
                     }
                     state = KEY_SKAN;
                     k = p + 1;
                 }
                 break;
-            BODY:
+            case BODY:
                 if (boundary) {
                     if (v = g_strstr_len(p, -1, boundary)) {
                         loc->message = g_strndup(p, v - p);
@@ -560,14 +576,10 @@ fprintf(stderr, "\tp=%p\tk=%p\tks=%p\tv=%p\n", p, k, ks, v);
                 }
                 state = STOP;
                 break;
-            STOP:
+            case STOP:
                 break;
         }
     }
-fprintf(stderr, "Boudary '%s'\n", boundary);
-fprintf(stderr, "from '%s'\n", loc->from);
-fprintf(stderr, "Message '%s'\n", loc->message);
-fprintf(stderr, "RTF '%s'\n", loc->rtf_message);
     g_free(boundary);
     g_free(mail);
     return loc;
@@ -595,7 +607,9 @@ _free_message_ack(MrimPktMessageAck *loc)
 {
     g_free(loc->from);
     g_free(loc->message);
-    g_free(loc->rtf_message);
+    if (loc->rtf_message) {
+        g_free(loc->rtf_message);
+    }
     g_free(loc);
 }
 
@@ -785,6 +799,17 @@ _free_modify_contact_ack(MrimPktModifyContactAck *loc)
 }
 
 static void
+_free_offline_message_ack(MrimPktOfflineMessageAck* loc)
+{
+    g_free(loc->from);
+    g_free(loc->message);
+    if (loc->rtf_message) {
+        g_free(loc->rtf_message);
+    }
+    g_free(loc);
+}
+
+static void
 _free_authorize_ack(MrimPktAuthorizeAck *loc)
 {
     g_free(loc->email);
@@ -903,6 +928,7 @@ mrim_pkt_free(MrimPktHeader *loc)
                 _free_modify_contact_ack((MrimPktModifyContactAck*) loc);
                 break;
             case MRIM_CS_OFFLINE_MESSAGE_ACK:
+                _free_offline_message_ack((MrimPktOfflineMessageAck*) loc);
                 break;
             case MRIM_CS_AUTHORIZE_ACK:
                 _free_authorize_ack((MrimPktAuthorizeAck*) loc);
