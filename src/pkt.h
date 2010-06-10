@@ -47,6 +47,9 @@ mrim_pkt_build_offline_message_del(MrimData *md, Uidl uidl);
 void
 mrim_pkt_build_authorize(MrimData *md, const gchar *email);
 
+void
+mrim_pkt_build_wp_request(MrimData *md, guint32 count, ...);
+
 /* Server to Client messages */
 typedef struct {
     MrimPktHeader header;
@@ -129,6 +132,16 @@ typedef struct {
     MrimPktHeader header;
     gchar *email;
 } MrimPktAuthorizeAck;
+
+typedef struct {
+    MrimPktHeader header;
+    guint32 status;
+    guint32 field_num;
+    guint32 max_rows;
+    time_t server_time;
+    GList *keys;
+    GList *users;
+} MrimPktAnketaInfo;
 
 MrimPktHeader *
 mrim_pkt_parse(MrimData *md);

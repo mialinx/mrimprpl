@@ -265,6 +265,63 @@ mrim_pkt_build_authorize(MrimData *md, const gchar *email)
 }
 
 void
+mrim_pkt_build_wp_request(MrimData *md, guint32 count, ...)
+{
+    MrimPktHeader header;
+    va_list rest;
+    guint32 i = 0, j = 0, param_len = 0;
+    gboolean found = FALSE;
+    guint32 key;
+    MrimPktLps *val;
+    GHashTable *params = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
+    guint32 order[] = {
+        MRIM_CS_WP_REQUEST_PARAM_USER,
+        MRIM_CS_WP_REQUEST_PARAM_DOMAIN,
+        MRIM_CS_WP_REQUEST_PARAM_NICKNAME,
+        MRIM_CS_WP_REQUEST_PARAM_FIRSTNAME,
+        MRIM_CS_WP_REQUEST_PARAM_LASTNAME,
+        MRIM_CS_WP_REQUEST_PARAM_SEX,
+        MRIM_CS_WP_REQUEST_PARAM_DATE1,
+        MRIM_CS_WP_REQUEST_PARAM_DATE2,
+        MRIM_CS_WP_REQUEST_PARAM_CITY_ID,
+        MRIM_CS_WP_REQUEST_PARAM_ZODIAC,
+        MRIM_CS_WP_REQUEST_PARAM_BIRTHDAY_MONTH,
+        MRIM_CS_WP_REQUEST_PARAM_BIRTHDAY_DAY,
+        MRIM_CS_WP_REQUEST_PARAM_COUNTRY_ID,
+        MRIM_CS_WP_REQUEST_PARAM_ONLINE,
+    };
+
+    va_start(rest, count);
+    for (i = 0; i < count; i++) {
+        key = va_arg(rest, guint32);
+        val = _str2lps(va_arg(rest, gchar*));
+        for (found = FALSE, j = 0; j < sizeof(order) / sizeof(guint32); j++) {
+            if (order[j] == key) {
+                found = TRUE;
+            }
+        }
+        if (found) {
+            g_hash_table_replace(params, (gpointer) key, val);
+            param_len += sizeof(key) + LPS_LEN(val);
+        }
+    }
+    va_end(rest);
+    _init_header(&header, ++md->tx_seq, MRIM_CS_WP_REQUEST, param_len);
+    
+    purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
+    for (i = 0; i < sizeof(order) / sizeof(guint32); i++) {
+        key = order[i];
+        if (val = g_hash_table_lookup(params, (gpointer) key)) {
+            key = GUINT32_TO_LE(key);
+            purple_circ_buffer_append(md->server.tx_buf, &key, sizeof(key));
+            purple_circ_buffer_append(md->server.tx_buf, val, LPS_LEN(val));
+        }
+    }
+
+    g_hash_table_destroy(params);
+}
+
+void
 mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id)
 {
     MrimPktHeader header;
@@ -692,6 +749,38 @@ _free_user_info(MrimPktUserInfo *loc)
     g_free(loc);
 }
 
+static MrimPktAnketaInfo*
+_parse_anketa_info(MrimData *md, MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    int i = 0;
+    GHashTable *user = NULL;
+    gchar *val = NULL;
+    MrimPktAnketaInfo *loc = g_new0(MrimPktAnketaInfo, 1);
+
+    _read_header(pkt, &loc->header, &pos);
+    loc->status = _read_ul(pkt, &pos);
+    loc->field_num = _read_ul(pkt, &pos);
+    loc->max_rows = _read_ul(pkt, &pos);
+    loc->server_time = (time_t) _read_ul(pkt, &pos);
+
+    for (i = 0; i < loc->field_num; i++) {
+        loc->keys = g_list_append(loc->keys, _read_lps(pkt, &pos));
+    }
+    loc->keys = g_list_first(loc->keys);
+
+    while (pos < loc->header.dlen) {
+        user = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
+        for (i = 0; i < loc->field_num; i++) {
+            g_hash_table_insert(user, g_list_nth_data(loc->keys, i), _read_lps(pkt, &pos));
+        }
+        loc->users = g_list_append(loc->users, user);
+    }
+    loc->users = g_list_first(loc->users);
+
+    return loc;
+}
+
 static MrimPktContactList*
 _parse_contact_list(MrimData *md, MrimPktHeader *pkt)
 {
@@ -816,6 +905,21 @@ _free_authorize_ack(MrimPktAuthorizeAck *loc)
     g_free(loc);
 }
 
+static void
+_free_anketa_info(MrimPktAnketaInfo *loc)
+{
+    GList *item = NULL;
+    for (item = g_list_first(loc->keys); item; item = g_list_next(item)) {
+        g_free(item->data);
+    }
+    g_list_free(loc->keys);
+    for (item = g_list_first(loc->users); item; item = g_list_next(item)) {
+        g_hash_table_destroy((GHashTable*) item->data);
+    }
+    g_list_free(loc->users);
+    g_free(loc);
+}
+
 MrimPktHeader*
 mrim_pkt_parse(MrimData *md)
 {
@@ -872,6 +976,7 @@ mrim_pkt_parse(MrimData *md)
         case MRIM_CS_MPOP_SESSION:
             break;
         case MRIM_CS_ANKETA_INFO:
+            loc = (MrimPktHeader*) _parse_anketa_info(md, pkt);
             break;
         case MRIM_CS_CONTACT_LIST2:
             loc = (MrimPktHeader*) _parse_contact_list(md, pkt);
@@ -936,6 +1041,7 @@ mrim_pkt_free(MrimPktHeader *loc)
             case MRIM_CS_MPOP_SESSION:
                 break;
             case MRIM_CS_ANKETA_INFO:
+                _free_anketa_info((MrimPktAnketaInfo*) loc);
                 break;
             case MRIM_CS_CONTACT_LIST2:
                 _free_contact_list((MrimPktContactList*) loc);

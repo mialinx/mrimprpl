@@ -199,7 +199,9 @@ typedef enum {
     ATMP_ADD_GROUP,
     ATMP_REMOVE_GROUP,
     ATMP_RENAME_GROUP,
-    ATMP_MESSAGE
+    ATMP_MESSAGE,
+    ATMP_CONTACT_INFO,
+    ATMP_CONTACT_SEARCH
 } MrimAttempType;
 
 typedef struct {
@@ -236,6 +238,12 @@ typedef struct {
             gchar *message;
             guint32 flags;
         } message;
+        struct {
+            gchar *name;
+        } contact_info;
+        struct {
+            guint32 unused;
+        } contact_search;
     };
 } MrimAttempt;
 
@@ -279,6 +287,11 @@ _mrim_attempt_new(MrimAttempType type, ...)
             atmp->message.message = g_strdup(va_arg(rest, gchar*));
             atmp->message.flags = va_arg(rest, guint32);
             break;
+        case ATMP_CONTACT_INFO:
+            atmp->contact_info.name = g_strdup(va_arg(rest, gchar*));
+            break;
+        case ATMP_CONTACT_SEARCH:
+            break;
     }
     va_end(rest);
     return atmp;
@@ -309,6 +322,11 @@ _mrim_attempt_destroy(MrimAttempt *atmp)
         case ATMP_MESSAGE:
             g_free(atmp->message.name);
             g_free(atmp->message.message);
+            break;
+        case ATMP_CONTACT_INFO:
+            g_free(atmp->contact_info.name);
+            break;
+        case ATMP_CONTACT_SEARCH:
             break;
     }
     g_free(atmp);
@@ -873,9 +891,22 @@ _mrim_authorize_cb(gpointer ptr)
  * Should arrange for purple_notify_userinfo() to be called with
  * who's user info.
  */
+
 void 
-mrim_get_info(PurpleConnection *gc, const char *who)
+mrim_get_info(PurpleConnection *gc, const gchar *who)
 {
+    MrimData *md = (MrimData*) gc->proto_data;
+    MrimAttempt *atmp = NULL;
+    gchar **nick_n_domain = g_strsplit(who, "@", 2);
+    mrim_pkt_build_wp_request(md, 2, MRIM_CS_WP_REQUEST_PARAM_USER, nick_n_domain[0],
+                                     MRIM_CS_WP_REQUEST_PARAM_DOMAIN, nick_n_domain[1]);
+    _send_out(md);
+    g_strfreev(nick_n_domain);
+
+    atmp = _mrim_attempt_new(ATMP_CONTACT_INFO, who);
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
+
+    purple_debug_info("mrim", "{%u} sending user info request for '%s'\n", (guint) md->tx_seq, who);
 }
 
 void 
@@ -1475,6 +1506,62 @@ _dispatch_logout(MrimData *md, MrimPktLogout *pkt)
 }
 
 static void
+_dispatch_contact_info(MrimData *md, gchar *name, MrimPktAnketaInfo *pkt)
+{
+    GHashTable *user = NULL;
+    GList *item = NULL, *keys = NULL;
+    gchar *key = NULL, *val = NULL;
+    PurpleNotifyUserInfo *user_info = purple_notify_user_info_new();
+
+    if (pkt->status == MRIM_ANKETA_INFO_STATUS_OK && pkt->users) {
+        user = (GHashTable*) pkt->users->data;
+        keys = item = g_hash_table_get_keys(user);
+        while (item) {
+            key = (gchar*) item->data;
+            val = g_hash_table_lookup(user, key);
+            purple_notify_user_info_add_pair(user_info, key, val);
+            item = g_list_next(item);
+        }
+        g_list_free(keys);
+    }
+    else {
+        purple_notify_user_info_add_pair(user_info, NULL, "Failed to load contact info");
+        purple_debug_error("mrim", "Failed to load contact info for %s\n", name);
+    }
+    
+    purple_notify_userinfo(md->account->gc, name, user_info, NULL, NULL);
+    purple_notify_user_info_destroy(user_info);
+}
+
+static void
+_dispatch_search_results(MrimData *md, MrimPktAnketaInfo *pkt)
+{
+}
+
+static void
+_dispatch_anketa_info(MrimData *md, MrimPktAnketaInfo* pkt)
+{
+    purple_debug_info("mrim", "anketa info dispatch %d\n", (guint) pkt->header.seq);
+ 
+    MrimAttempt *atmp;
+
+    if (g_hash_table_lookup_extended(md->attempts, (gpointer) pkt->header.seq, NULL, (gpointer*) &atmp)) {
+        if (atmp->type == ATMP_CONTACT_INFO) {
+            _dispatch_contact_info(md, atmp->contact_info.name, pkt);
+        }
+        else if (atmp->type == ATMP_CONTACT_SEARCH) {
+            _dispatch_search_results(md, pkt);
+        }
+        else {
+            purple_debug_error("mrim", "incorrect attempt type for anketa info request\n");
+        }
+    }
+    else {
+        purple_debug_error("mrim", "failed to find attempt for anketa info request\n");
+    }
+}
+
+static void
 _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
 {
     MrimGroup *mgroup = NULL;
@@ -1596,6 +1683,7 @@ _dispatch(MrimData *md, MrimPktHeader *pkt)
         case MRIM_CS_MPOP_SESSION:
             break;
         case MRIM_CS_ANKETA_INFO:
+            _dispatch_anketa_info(md, (MrimPktAnketaInfo*) pkt);
             break;
         case MRIM_CS_CONTACT_LIST2:
             _dispatch_contact_list(md, (MrimPktContactList*) pkt);
