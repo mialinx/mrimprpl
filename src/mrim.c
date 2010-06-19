@@ -1509,20 +1509,59 @@ static void
 _dispatch_contact_info(MrimData *md, gchar *name, MrimPktAnketaInfo *pkt)
 {
     GHashTable *user = NULL;
-    GList *item = NULL, *keys = NULL;
     gchar *key = NULL, *val = NULL;
     PurpleNotifyUserInfo *user_info = purple_notify_user_info_new();
 
     if (pkt->status == MRIM_ANKETA_INFO_STATUS_OK && pkt->users) {
+
+        purple_notify_user_info_add_pair(user_info, "E-mail", name);
+        gchar **nd = g_strsplit(name, "@", 2);
+        gchar **parts = g_strsplit(nd[1], ".", 2);
+        gchar *myworld_url = g_strdup_printf("http://my.mail.ru/%s/%s/", parts[0], nd[0]);
+        gchar *blog_url =  g_strdup_printf("http://blogs.mail.ru/%s/%s/", parts[0], nd[0]);
+        purple_notify_user_info_add_pair(user_info, "MyWorld", myworld_url);
+        purple_notify_user_info_add_pair(user_info, "Blog", blog_url);
+        g_free(blog_url);
+        g_free(myworld_url);
+        g_strfreev(parts);
+        g_strfreev(nd);
+
         user = (GHashTable*) pkt->users->data;
-        keys = item = g_hash_table_get_keys(user);
-        while (item) {
-            key = (gchar*) item->data;
-            val = g_hash_table_lookup(user, key);
-            purple_notify_user_info_add_pair(user_info, key, val);
-            item = g_list_next(item);
+        if ((val = g_hash_table_lookup(user, "Nickname")) && strlen(val)) {
+            purple_notify_user_info_add_pair(user_info, "Nick", val);
         }
-        g_list_free(keys);
+        if ((val = g_hash_table_lookup(user, "FirstName")) && strlen(val)) {
+            purple_notify_user_info_add_pair(user_info, "First Name", val);
+        }
+        if ((val = g_hash_table_lookup(user, "LastName")) && strlen(val)) {
+            purple_notify_user_info_add_pair(user_info, "Last Name", val);
+        }
+        if ((val = g_hash_table_lookup(user, "Sex")) && strlen(val)) {
+            const gchar *sex = atol(val) == 1 ? "Male" : 
+                               atol(val) == 2 ? "Female" :
+                               "Unknown";
+            purple_notify_user_info_add_pair(user_info, "Sex", sex);
+        }
+        if ((val = g_hash_table_lookup(user, "Birthday")) && strlen(val)) {
+            purple_notify_user_info_add_pair(user_info, "Birthday", val);
+        }
+        if ((val = g_hash_table_lookup(user, "Phone")) && strlen(val)) {
+            purple_notify_user_info_add_pair(user_info, "Phone", val);
+        }
+        if ((val = g_hash_table_lookup(user, "Zodiac")) && strlen(val)) {
+            const gchar* zodiac[] = {
+                "The Ram", "The Bull", "The Twins", "The Crab", 
+                "The Lion", "The Virgin", "The Scales", "The Scorpion", 
+                "The Archer", "The Sea-Goat", "The Water Bearer", "The Fish"
+            };
+            guint32 idx = (guint32) atoi(val);
+            if (idx > 0 && idx < sizeof(zodiac) / sizeof(gchar*) + 1) {
+                purple_notify_user_info_add_pair(user_info, "Zodiac", zodiac[idx - 1]);
+            }
+        }
+        if ((val = g_hash_table_lookup(user, "Location")) && strlen(val)) {
+            purple_notify_user_info_add_pair(user_info, "Location", val);
+        }
     }
     else {
         purple_notify_user_info_add_pair(user_info, NULL, "Failed to load contact info");
