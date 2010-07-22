@@ -784,12 +784,6 @@ mrim_send_typing(PurpleConnection *gc, const char *name, PurpleTypingState state
     }
 }
 
-/* Sends buzzzzz signal to a buddy */
-gboolean 
-mrim_send_attention(PurpleConnection *gc, const char *username, guint type)
-{
-}
-
 /**************************************************/
 /************* AUTHORIZATION **********************/
 /**************************************************/
@@ -1811,12 +1805,6 @@ mrim_blist_node_menu(PurpleBlistNode *node)
     }
 
     return list;
-}
-
-GList*
-mrim_get_attention_types(PurpleAccount *account)
-{
-    return NULL;
 }
 
 gboolean 
