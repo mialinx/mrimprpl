@@ -131,10 +131,4 @@ mrim_remove_group(PurpleConnection *gc, PurpleGroup *group);
 gboolean
 mrim_offline_message(const PurpleBuddy *buddy);
 
-gboolean
-mrim_send_attention(PurpleConnection *gc, const char *username, guint type);
-
-GList *
-mrim_get_attention_types(PurpleAccount *account);
-
 #endif /*MRIM_H*/

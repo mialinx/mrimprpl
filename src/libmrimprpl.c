@@ -83,8 +83,8 @@ static PurplePluginProtocolInfo protocol_info = {
     NULL,                   /* int (*send_raw)(PurpleConnection *gc, const char *buf, int len); */
     NULL,                   /* char *(*roomlist_room_serialize)(PurpleRoomlistRoom *room); */
     NULL,                   /* void (*unregister_user)(PurpleAccount *, PurpleAccountUnregistrationCb cb, void *user_data); */
-    mrim_send_attention,    /* send buzzzz signal to a buddy */
-    mrim_get_attention_types, /* returns attention types */
+    NULL,                   /* send buzzzz signal to a buddy */
+    NULL,                   /* returns attention types */
     sizeof(protocol_info),
     NULL,
     NULL,
