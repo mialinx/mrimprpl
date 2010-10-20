@@ -48,6 +48,12 @@ _lps2str(MrimPktLps *lps)
     GError *err = NULL;
 
     g_get_charset(&local_charset);
+
+/*
+purple_debug_info("mrim", "Current locale: %s\n", local_charset);
+gchar *cpy = g_strndup(lps->data, lps->length);
+purple_debug_info("mrim", "Raw: %s\n", cpy);
+*/
     str = g_convert_with_fallback(lps->data, lps->length, local_charset, "WINDOWS-1251", "?",
                             NULL, &str_len, &err);
     if (!str) {
@@ -542,10 +548,12 @@ _parse_message_ack(MrimData *md, MrimPktHeader *pkt)
     loc->flags = _read_ul(pkt, &pos);
     loc->from = _read_lps(pkt, &pos);
     loc->message = _read_lps(pkt, &pos);
-    loc->rtf_message = _read_lps(pkt, &pos);
+    if (pos < loc->header.dlen) {
+        /* bug with chat messages: no rtf lps */
+        loc->rtf_message = _read_lps(pkt, &pos);
+    }
     return loc;
 }
-
 
 static MrimPktOfflineMessageAck*
 _parse_offline_message_ack(MrimData *md, MrimPktHeader *pkt)

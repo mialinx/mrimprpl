@@ -1106,7 +1106,7 @@ _dispatch_login_rej(MrimData *md, MrimPktLoginRej *pkt)
 }
 
 static void
-_dispatch_message_ack(MrimData *md, MrimPktMessageAck *pkt)
+_dispatch_normal_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *message)
 {
     PurpleConversation *conv = NULL;
     PurpleConvIm *conv_im = NULL;
@@ -1114,10 +1114,10 @@ _dispatch_message_ack(MrimData *md, MrimPktMessageAck *pkt)
     MrimAuthParams *auth_params = NULL;
     gchar *clean = NULL;
 
-    purple_debug_info("mrim", "message from %s flags 0x%08x\n", pkt->from, (guint) pkt->flags);
+    purple_debug_info("mrim", "message from %s flags 0x%08x\n", from, (guint) flags);
 
-    if (pkt->flags & MESSAGE_FLAG_NOTIFY) {
-        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, pkt->from, md->account);
+    if (flags & MESSAGE_FLAG_NOTIFY) {
+        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, from, md->account);
         if (!conv) {
             return;
         }
@@ -1125,25 +1125,47 @@ _dispatch_message_ack(MrimData *md, MrimPktMessageAck *pkt)
         purple_conv_im_set_typing_state(conv_im, PURPLE_TYPING);
         purple_conv_im_start_typing_timeout(conv_im, MRIM_TYPING_TIMEOUT);
     }
-    else if (pkt->flags & MESSAGE_FLAG_AUTHORIZE) {
-        if (!g_hash_table_lookup_extended(md->contacts, pkt->from, NULL, (gpointer*) &contact)) {
+    else if (flags & MESSAGE_FLAG_AUTHORIZE) {
+        if (!g_hash_table_lookup_extended(md->contacts, from, NULL, (gpointer*) &contact)) {
             contact = NULL;
         }
-        auth_params = _mrim_auth_params_new(md, pkt->from);
-        purple_account_request_authorization(md->account, pkt->from, NULL, contact ? contact->nick : NULL, 
-                    pkt->message, contact ? TRUE : FALSE, _mrim_authorize_cb, NULL, auth_params);
+        auth_params = _mrim_auth_params_new(md, from);
+        purple_account_request_authorization(md->account, from, NULL, contact ? contact->nick : NULL, 
+                    message, contact ? TRUE : FALSE, _mrim_authorize_cb, NULL, auth_params);
     }
     else {
-        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, pkt->from, md->account);
+        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, from, md->account);
         if (!conv) {
-            conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, pkt->from);
+            conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, from);
         }
-        purple_conversation_set_name(conv, pkt->from);
-        clean = purple_markup_escape_text(pkt->message, -1);
-        purple_conversation_write(conv, pkt->from, clean, PURPLE_MESSAGE_RECV, time(NULL));
+        purple_conversation_set_name(conv, from);
+        clean = purple_markup_escape_text(message, -1);
+        purple_conversation_write(conv, from, clean, PURPLE_MESSAGE_RECV, time(NULL));
         g_free(clean);
     }
+}
 
+static void
+_dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *message)
+{
+    PurpleConversation *conv = NULL;
+    PurpleConvIm *conv_im = NULL;
+    MrimContact *contact = NULL;
+    MrimAuthParams *auth_params = NULL;
+    gchar *clean = NULL;
+
+    purple_debug_info("mrim", "chat message from %s flags 0x%08x\n == \n%s\n == \n", from, (guint) flags, message);
+}
+
+static void
+_dispatch_message_ack(MrimData *md, MrimPktMessageAck *pkt)
+{
+    if (g_str_has_suffix(pkt->from, "chat.agent")) {
+        _dispatch_chat_message_ack(md, pkt->flags, pkt->from, pkt->message);
+    }
+    else {
+        _dispatch_normal_message_ack(md, pkt->flags, pkt->from, pkt->message);
+    }
     if (!(pkt->flags & MESSAGE_FLAG_NORECV)) {
         mrim_pkt_build_message_recv(md, pkt->from, pkt->msg_id);
         _send_out(md);
@@ -1422,37 +1444,16 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
 static void
 _dispatch_offline_message_ack(MrimData *md, MrimPktOfflineMessageAck* pkt)
 {
-    PurpleConversation *conv = NULL;
-    PurpleConvIm *conv_im = NULL;
-    MrimContact *contact = NULL;
-    MrimAuthParams *auth_params = NULL;
-    gchar *clean = NULL;
-
-    purple_debug_info("mrim", "offline message from %s flags 0x%08x\n", pkt->from, (guint) pkt->flags);
-
-    if (pkt->flags & MESSAGE_FLAG_AUTHORIZE) {
-        if (!g_hash_table_lookup_extended(md->contacts, pkt->from, NULL, (gpointer*) &contact)) {
-            contact = NULL;
-        }
-        auth_params = _mrim_auth_params_new(md, pkt->from);
-        purple_account_request_authorization(md->account, pkt->from, NULL, contact ? contact->nick : NULL, 
-                    pkt->message, contact ? TRUE : FALSE, _mrim_authorize_cb, NULL, auth_params);
+    if (g_str_has_suffix(pkt->from, "chat.agent")) {
+        _dispatch_chat_message_ack(md, pkt->flags, pkt->from, pkt->message);
     }
     else {
-        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, pkt->from, md->account);
-        if (!conv) {
-            conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, pkt->from);
-        }
-        purple_conversation_set_name(conv, pkt->from);
-        clean = purple_markup_escape_text(pkt->message, -1);
-        purple_conversation_write(conv, pkt->from, clean, PURPLE_MESSAGE_RECV, pkt->time);
-        g_free(clean);
+        _dispatch_normal_message_ack(md, pkt->flags, pkt->from, pkt->message);
     }
 
-    if (!(pkt->flags & MESSAGE_FLAG_NORECV)) {
-        mrim_pkt_build_offline_message_del(md, pkt->uidl);
-        _send_out(md);
-    }
+    /* offline messages should be accepted despite NORECV flag */
+    mrim_pkt_build_offline_message_del(md, pkt->uidl);
+    _send_out(md);
 }
 
 static void
