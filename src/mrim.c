@@ -1155,6 +1155,35 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
     gchar *clean = NULL;
 
     purple_debug_info("mrim", "chat message from %s flags 0x%08x\n == \n%s\n == \n", from, (guint) flags, message);
+
+    /* fallback to normall dispatching.. temp solution */
+    if (flags & MESSAGE_FLAG_NOTIFY) {
+        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, from, md->account);
+        if (!conv) {
+            return;
+        }
+        conv_im = PURPLE_CONV_IM(conv);
+        purple_conv_im_set_typing_state(conv_im, PURPLE_TYPING);
+        purple_conv_im_start_typing_timeout(conv_im, MRIM_TYPING_TIMEOUT);
+    }
+    else if (flags & MESSAGE_FLAG_AUTHORIZE) {
+        if (!g_hash_table_lookup_extended(md->contacts, from, NULL, (gpointer*) &contact)) {
+            contact = NULL;
+        }
+        auth_params = _mrim_auth_params_new(md, from);
+        purple_account_request_authorization(md->account, from, NULL, contact ? contact->nick : NULL, 
+                    message, contact ? TRUE : FALSE, _mrim_authorize_cb, NULL, auth_params);
+    }
+    else {
+        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, from, md->account);
+        if (!conv) {
+            conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, from);
+        }
+        purple_conversation_set_name(conv, from);
+        clean = purple_markup_escape_text(message, -1);
+        purple_conversation_write(conv, from, clean, PURPLE_MESSAGE_RECV, time(NULL));
+        g_free(clean);
+    }
 }
 
 static void
