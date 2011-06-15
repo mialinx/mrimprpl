@@ -1,6 +1,7 @@
 #include "config.h"
 #include <glib.h>
 #include <purple.h>
+
 #include <netinet/in.h>
 #include <string.h>
 #include <errno.h>
@@ -878,6 +879,54 @@ _mrim_authorize_cb(gpointer ptr)
 }
 
 /**************************************************/
+/************* AVATARS FETCHING *******************/
+/**************************************************/
+
+typedef struct {
+    MrimData *md;
+    gchar *name;
+} MrimAvatarRequest;
+
+static void 
+_mrim_fetch_avatar_cb(PurpleUtilFetchUrlData *url_data, gpointer user_data,
+                    const gchar *url_text, gsize len, const gchar *error_message) 
+{
+    MrimAvatarRequest *ar = (MrimAvatarRequest*) user_data;
+    if (!url_text) {
+        purple_debug_info("mrim", "failed to download avatar for %s: %s", ar->name, error_message);
+        return;
+    }
+    void *img = g_memdup(url_text, len);
+    purple_buddy_icon_new(ar->md->account, ar->name, img, len, NULL);
+    // TODO : need we free img structure
+    g_free(ar->name);
+    g_free(ar);
+}
+
+static void
+_mrim_fetch_avatar(MrimData *md, const gchar *name)
+{
+    MrimAvatarRequest *ar = g_new0(MrimAvatarRequest, 1);
+    ar->md = md;
+    ar->name = g_strdup(name);
+
+    gchar* box = g_strdup(name);
+    gchar* at  = g_strstr_len(box, -1, "@");
+    gchar* dot = g_strstr_len(at, -1, ".");
+    if (!at || !dot) {
+        purple_debug_warning("mrim", "failed to parse email %s", name);
+        return;
+    }
+    gchar* domain = at + 1;
+    *at = *dot = '\0';
+    gchar* url = g_strconcat("http://obraz.foto.mail.ru/", domain, "/", box, "/_mrimavatarsmall", NULL);
+    g_free(box);
+    purple_debug_info("mrim", "fetching avatar from %s", url);
+    purple_util_fetch_url(url, TRUE, NULL, TRUE, _mrim_fetch_avatar_cb, ar);
+    g_free(url);
+}
+
+/**************************************************/
 /************* CONTACT MANIPULATION ***************/
 /**************************************************/
 
@@ -922,6 +971,7 @@ void
 mrim_set_idle(PurpleConnection *gc, int idletime)
 {
 }
+
 
 static void
 _mrim_add_contact(MrimData *md, const gchar *name, const gchar *group_name)
@@ -1691,6 +1741,8 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
             purple_debug_info("mrim", "contact_list: contact: [%u] %s (%s) [group %u flags %u server flags %u]\n", 
                                         contact->id, contact->name, contact->nick, contact->group_id, 
                                         contact->flags, contact->server_flags);
+            // TODO: add random delay, or even sequential downloading
+            _mrim_fetch_avatar(md, contact->name);
         }
         else {
             purple_debug_misc("mrim", "contact_list: contact: [%u] %s (%s) [removed]\n",
