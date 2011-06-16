@@ -14,6 +14,8 @@
 #define MRIM_TYPING_TIMEOUT 10
 #define MRIM_CIRC_BUFFER_GROW (16 * 1024)
 #define MRIM_LINR_BUFFER_INIT (1024)
+#define MRIM_AVATAR_MAX_FAILS 3
+#define MRIM_AVATAR_DELAY     2000
 
 
 /**************************************************/
@@ -885,31 +887,48 @@ _mrim_authorize_cb(gpointer ptr)
 typedef struct {
     MrimData *md;
     gchar *name;
+    gchar *url;
+    guint fails;
 } MrimAvatarRequest;
+
+static void 
+_mrim_fetch_avatar_cb(PurpleUtilFetchUrlData *url_data, gpointer user_data,
+                    const gchar *url_text, gsize len, const gchar *error_message);
+
+gboolean
+_mrim_fetch_avatar_delayed(gpointer ptr)
+{
+    MrimAvatarRequest *ar = (MrimAvatarRequest*) ptr;
+    purple_util_fetch_url(ar->url, TRUE, NULL, TRUE, _mrim_fetch_avatar_cb, ar);
+    return FALSE;
+}
 
 static void 
 _mrim_fetch_avatar_cb(PurpleUtilFetchUrlData *url_data, gpointer user_data,
                     const gchar *url_text, gsize len, const gchar *error_message) 
 {
     MrimAvatarRequest *ar = (MrimAvatarRequest*) user_data;
-    if (!url_text) {
-        purple_debug_info("mrim", "failed to download avatar for %s: %s", ar->name, error_message);
-        return;
+    if (url_text) {
+        void *img = g_memdup(url_text, len);
+        purple_buddy_icon_new(ar->md->account, ar->name, img, len, NULL);
+        // TODO : need we free img structure
+        g_free(ar->name);
+        g_free(ar->url);
+        g_free(ar);
     }
-    void *img = g_memdup(url_text, len);
-    purple_buddy_icon_new(ar->md->account, ar->name, img, len, NULL);
-    // TODO : need we free img structure
-    g_free(ar->name);
-    g_free(ar);
+    else {
+        ar->fails++;
+        purple_debug_info("mrim", "avatar download failed %u times for %s: %s\n", ar->fails, ar->name, error_message);
+        if (++ar->fails < MRIM_AVATAR_MAX_FAILS) {
+            guint delay = rand() / RAND_MAX * MRIM_AVATAR_DELAY;
+            purple_timeout_add(delay, _mrim_fetch_avatar_delayed, ar); 
+        }
+    }
 }
 
 static void
 _mrim_fetch_avatar(MrimData *md, const gchar *name)
 {
-    MrimAvatarRequest *ar = g_new0(MrimAvatarRequest, 1);
-    ar->md = md;
-    ar->name = g_strdup(name);
-
     gchar* box = g_strdup(name);
     gchar* at  = g_strstr_len(box, -1, "@");
     gchar* dot = g_strstr_len(at, -1, ".");
@@ -919,11 +938,15 @@ _mrim_fetch_avatar(MrimData *md, const gchar *name)
     }
     gchar* domain = at + 1;
     *at = *dot = '\0';
-    gchar* url = g_strconcat("http://obraz.foto.mail.ru/", domain, "/", box, "/_mrimavatarsmall", NULL);
+
+    MrimAvatarRequest *ar = g_new0(MrimAvatarRequest, 1);
+    ar->md = md;
+    ar->name = g_strdup(name);
+    ar->url = g_strconcat("http://obraz.foto.mail.ru/", domain, "/", box, "/_mrimavatarsmall", NULL);
     g_free(box);
-    purple_debug_info("mrim", "fetching avatar from %s", url);
-    purple_util_fetch_url(url, TRUE, NULL, TRUE, _mrim_fetch_avatar_cb, ar);
-    g_free(url);
+
+    purple_debug_info("mrim", "fetching avatar from %s\n", ar->url);
+    purple_util_fetch_url(ar->url, TRUE, NULL, TRUE, _mrim_fetch_avatar_cb, ar);
 }
 
 /**************************************************/
@@ -1741,7 +1764,6 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
             purple_debug_info("mrim", "contact_list: contact: [%u] %s (%s) [group %u flags %u server flags %u]\n", 
                                         contact->id, contact->name, contact->nick, contact->group_id, 
                                         contact->flags, contact->server_flags);
-            // TODO: add random delay, or even sequential downloading
             _mrim_fetch_avatar(md, contact->name);
         }
         else {
