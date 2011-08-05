@@ -83,6 +83,9 @@ mrim_status_types (PurpleAccount *account);
 GList *
 mrim_blist_node_menu (PurpleBlistNode *node);
 
+GList*
+mrim_chat_info(PurpleConnection *gc);
+
 void
 mrim_login(PurpleAccount *account);
 
@@ -112,6 +115,9 @@ mrim_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group);
 
 void
 mrim_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group);
+
+void
+mrim_join_chat(PurpleConnection *, GHashTable *components);
 
 void 
 mrim_alias_buddy(PurpleConnection *gc, const char *who, const char *alias);
