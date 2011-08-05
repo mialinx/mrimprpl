@@ -19,6 +19,22 @@
 
 
 /**************************************************/
+/************* MINOR UTILS ************************/
+/**************************************************/
+
+static void
+ghf_dump(gpointer key, gpointer val, gpointer udata)
+{
+   fprintf(stderr, "%s %s -> %s\n", udata, key, val); 
+}
+
+static gboolean
+is_chat_email(const char *email)
+{
+    return g_str_has_suffix(email, "@chat.agent");
+}
+
+/**************************************************/
 /************* CONTACT LIST ***********************/
 /**************************************************/
 
@@ -188,6 +204,37 @@ _status_mrim2purple(guint32 mrim_status)
             return purple_primitive_get_id_from_type(PURPLE_STATUS_UNSET);
             break;
     }
+}
+
+PurpleChat*
+_purple_find_chat_by_component(PurpleAccount *acc, const char *comp_name, const char *comp_val)
+{
+    PurpleBlistNode *node, *group;
+    PurpleChat *chat;
+    GHashTable *components;
+    gchar *chat_comp_val;
+
+    for (group = purple_blist_get_root(); 
+         group != NULL; 
+         group = purple_blist_node_next(group, TRUE)) 
+    {
+        for (node = purple_blist_node_get_first_child(group);
+             node != NULL; 
+             node = purple_blist_node_next(node, TRUE)) 
+        {
+            if (PURPLE_BLIST_NODE_IS_CHAT(node)) {
+                chat = (PurpleChat*) node;
+                components = purple_chat_get_components(chat);
+                chat_comp_val = g_hash_table_lookup(components, comp_name);
+                if (acc == purple_chat_get_account(chat) 
+                    && chat_comp_val && comp_val && !strcmp(chat_comp_val, comp_val)) 
+                {
+                    return chat;
+                }
+            }
+        }
+    }
+    return NULL;
 }
 
 /**************************************************/
@@ -1129,6 +1176,17 @@ mrim_group_buddy(PurpleConnection *gc, const gchar *name,
 }
 
 /**************************************************/
+/************* CHAT *******************************/
+/**************************************************/
+
+void
+mrim_join_chat(PurpleConnection *gc, GHashTable *components)
+{
+    fprintf(stderr, "Called join chat\n");
+    g_hash_table_foreach(components, ghf_dump, "components: ");
+}
+
+/**************************************************/
 /************* DISPATCH ***************************/
 /**************************************************/
 
@@ -1262,7 +1320,7 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
 static void
 _dispatch_message_ack(MrimData *md, MrimPktMessageAck *pkt)
 {
-    if (g_str_has_suffix(pkt->from, "chat.agent")) {
+    if (is_chat_email(pkt->from)) {
         _dispatch_chat_message_ack(md, pkt->flags, pkt->from, pkt->message);
     }
     else {
@@ -1546,7 +1604,7 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
 static void
 _dispatch_offline_message_ack(MrimData *md, MrimPktOfflineMessageAck* pkt)
 {
-    if (g_str_has_suffix(pkt->from, "chat.agent")) {
+    if (is_chat_email(pkt->from)) {
         _dispatch_chat_message_ack(md, pkt->flags, pkt->from, pkt->message);
     }
     else {
@@ -1704,6 +1762,7 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     MrimContact *contact = NULL;
     PurpleGroup *group = NULL;
     PurpleBuddy *buddy = NULL;
+    PurpleChat *chat = NULL;
     GList *item = NULL;
 
     if (pkt->status != GET_CONTACTS_OK) {
@@ -1717,7 +1776,7 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     g_hash_table_remove_all(md->groups);
     g_hash_table_remove_all(md->contacts);
 
-    /* ensure groups */
+    /* add groups */
     for (item = g_list_first(pkt->groups); item; item = g_list_next(item)) {
         mgroup = (MrimGroup*) item->data;
         if (!(mgroup->flags & CONTACT_FLAG_REMOVED)) {
@@ -1730,26 +1789,14 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
                                         mgroup->id, mgroup->name, mgroup->flags);
         }
         else {
-            /* do not remove groups from pidgin blist as they may be used by another accounts */
             purple_debug_misc("mrim", "contact_list: group: [%u] %s [removed]\n", mgroup->id, mgroup->name);
         }
     }
 
-    /* remove all buddies */
-    GSList *buddies = NULL, *sitem = NULL;
-    buddies = sitem = purple_find_buddies(md->account, NULL);
-    while (sitem) {
-        buddy = (PurpleBuddy*) sitem->data;
-        purple_blist_remove_buddy(buddy);
-        sitem = g_slist_next(sitem);
-    }
-    g_slist_free(buddies);
-
-    /* add buddies */
+    /* add contacts and chats */
     for (item = g_list_first(pkt->contacts); item; item = g_list_next(item)) {
         contact = (MrimContact*) item->data;
         if (!(contact->flags & CONTACT_FLAG_REMOVED)) {
-            buddy = purple_buddy_new(md->account, contact->name, contact->nick);
             mgroup = _mrim_contact_get_group(md, contact);
             if (mgroup && !(mgroup->flags & CONTACT_FLAG_REMOVED)) {
                 group = purple_find_group(mgroup->name);
@@ -1758,17 +1805,67 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
                 group = NULL;
             }
             g_hash_table_replace(md->contacts, contact->name, contact);
-            purple_blist_add_buddy(buddy, NULL, group, NULL);
-            purple_prpl_got_user_status(md->account, contact->name, 
-                                    _status_mrim2purple(contact->status), NULL);
-            purple_debug_info("mrim", "contact_list: contact: [%u] %s (%s) [group %u flags %u server flags %u]\n", 
-                                        contact->id, contact->name, contact->nick, contact->group_id, 
-                                        contact->flags, contact->server_flags);
+            if (is_chat_email(contact->name)) {
+                while (chat = _purple_find_chat_by_component(md->account, "name", contact->name)) {
+                    purple_blist_remove_chat(chat);
+                }
+                GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+                g_hash_table_replace(components, g_strdup("name"), g_strdup(contact->name));
+                chat = purple_chat_new(md->account, contact->nick, components);
+                purple_blist_add_chat(chat, group, NULL);
+                // TODO : fetch chat members
+            }
+            else {
+                if (buddy = purple_find_buddy(md->account, contact->name)) {
+                    purple_blist_remove_buddy(buddy);
+                }
+                buddy = purple_buddy_new(md->account, contact->name, contact->nick);
+                purple_blist_add_buddy(buddy, NULL, group, NULL);
+                purple_prpl_got_user_status(md->account, contact->name, 
+                                        _status_mrim2purple(contact->status), NULL);
+            }
+            purple_debug_info("mrim", "contact_list: %s: [%u] %s (%s) [group %u flags %u server flags %u]\n", 
+                                       is_chat_email(contact->name) ? "chat" : "contact",
+                                       contact->id, contact->name, contact->nick, contact->group_id, 
+                                       contact->flags, contact->server_flags);
             _mrim_fetch_avatar(md, contact->name);
         }
         else {
-            purple_debug_misc("mrim", "contact_list: contact: [%u] %s (%s) [removed]\n",
-                                        contact->id, contact->name, contact->nick);
+            purple_debug_misc("mrim", "contact_list: %s: [%u] %s (%s) [removed]\n",
+                                       is_chat_email(contact->name) ? "chat" : "contact",
+                                       contact->id, contact->name, contact->nick);
+        }
+    }
+
+    // remove deleted contacts and chats
+    PurpleBlistNode *node, *group_node;
+
+    for (group_node = purple_blist_get_root(); 
+         group_node != NULL; 
+         group_node = purple_blist_node_next(group_node, TRUE)) 
+    {
+        for (node = purple_blist_node_get_first_child(group_node);
+             node != NULL; 
+             node = purple_blist_node_next(node, TRUE)) 
+        {
+            if (PURPLE_BLIST_NODE_IS_CHAT(node)) {
+                chat = (PurpleChat*) node;
+                GHashTable *components = purple_chat_get_components(chat);
+                gchar *name = g_hash_table_lookup(components, "name");
+                if (md->account == purple_chat_get_account(chat) && name
+                    && !g_hash_table_lookup(md->contacts, name))
+                {
+                    purple_blist_remove_chat(chat);
+                }
+            }
+            if (PURPLE_BLIST_NODE_IS_BUDDY(node)) {
+                buddy = (PurpleBuddy*) node;
+                if (md->account == purple_buddy_get_account(buddy)
+                    && !g_hash_table_lookup(md->contacts, purple_buddy_get_name(buddy)))
+                {
+                    purple_blist_remove_buddy(buddy);
+                }
+            }
         }
     }
 
@@ -1909,6 +2006,20 @@ mrim_blist_node_menu(PurpleBlistNode *node)
     }
 
     return list;
+}
+
+GList*
+mrim_chat_info(PurpleConnection *gc)
+{
+    //return NULL; // we need no extra params
+    GList *list = NULL;
+    struct proto_chat_entry *entry = g_new0(struct proto_chat_entry, 1);
+    entry->label = "Chat title";
+    entry->identifier = "nick";
+    entry->required = TRUE;
+    list = g_list_append(list, entry);
+    return list;
+    
 }
 
 gboolean 
