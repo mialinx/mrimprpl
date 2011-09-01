@@ -32,18 +32,22 @@ mrim_pkt_build_change_status(MrimData *md, guint32 status);
 
 void
 mrim_pkt_build_add_contact(MrimData *md, guint32 flags, guint32 group_id, 
-                    const gchar *email, const gchar *name);
+                    const gchar *email, const gchar *nick);
+
+void
+mrim_pkt_build_add_chat(MrimData *md, guint32 flags, const gchar *nick, 
+                    const gboolean private_chat);
                     
 void
 mrim_pkt_build_modify_contact(MrimData *md, guint32 id, guint32 flags, guint32 group_id, 
-                    const gchar *email, const gchar *name);
+                    const gchar *email, const gchar *nick);
 
 void
 mrim_pkt_build_message(MrimData *md, guint32 flags, const gchar *to, const gchar *message, 
                     const gchar *rtf_message);
 
 void
-mrim_pkt_build_chat_get_members(MrimData *md, guint32 flags, const gchar* name);
+mrim_pkt_build_chat_get_members(MrimData *md, guint32 flags, const gchar* email);
 
 void
 mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id);
@@ -104,6 +108,7 @@ typedef struct {
     MrimPktHeader header;
     guint32 status;
     guint32 contact_id;
+    gchar *contact_email;
 } MrimPktAddContactAck;
 
 typedef struct {
@@ -129,7 +134,7 @@ typedef struct {
 
 typedef struct {
     MrimPktChatHeader header;
-    gchar *name;
+    gchar *nick;
     GList *members;
 } MrimPktChatMembers;
 

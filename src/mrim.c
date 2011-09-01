@@ -39,19 +39,19 @@ is_chat_email(const char *email)
 /**************************************************/
 
 MrimGroup*
-mrim_group_new(const guint32 id, const guint32 flags, const gchar *name)
+mrim_group_new(const guint32 id, const guint32 flags, const gchar *nick)
 {
     MrimGroup *group = g_new0(MrimGroup, 1);
     group->id = id;
     group->flags = flags;
-    group->name = g_strdup(name);
+    group->nick = g_strdup(nick);
     return group;
 }
 
 static void
 _mrim_group_destroy(MrimGroup* group)
 {
-    g_free(group->name);
+    g_free(group->nick);
     g_free(group);
 }
 
@@ -63,7 +63,7 @@ _mrim_group_free(gpointer ptr)
 
 MrimContact*
 mrim_contact_new(const guint32 id, const guint32 flags, const guint32 server_flags, 
-            const guint32 status, const guint32 group_id, const gchar *name, const gchar *nick)
+            const guint32 status, const guint32 group_id, const gchar *email, const gchar *nick)
 {
     MrimContact *contact = g_new0(MrimContact, 1);
     contact->id = id;
@@ -71,7 +71,7 @@ mrim_contact_new(const guint32 id, const guint32 flags, const guint32 server_fla
     contact->server_flags = server_flags;
     contact->status = status;
     contact->group_id = group_id;
-    contact->name = g_strdup(name);
+    contact->email = g_strdup(email);
     contact->nick = g_strdup(nick);
     return contact;
 }
@@ -79,7 +79,7 @@ mrim_contact_new(const guint32 id, const guint32 flags, const guint32 server_fla
 static void
 _mrim_contact_destroy(MrimContact *contact)
 {
-    g_free(contact->name);
+    g_free(contact->email);
     g_free(contact->nick);
     g_free(contact);
 }
@@ -144,13 +144,13 @@ _mrim_contact_set_nick(MrimContact *contact, const gchar *new_nick)
 }
 
 static void
-_mrim_group_rename(MrimData *md, MrimGroup *group, const gchar *new_name)
+_mrim_group_rename(MrimData *md, MrimGroup *group, const gchar *new_nick)
 {
-    if (md && group && new_name) {
-        g_hash_table_steal(md->groups, group->name);
-        g_free(group->name);
-        group->name = g_strdup(new_name);
-        g_hash_table_replace(md->groups, group->name, group);
+    if (md && group && new_nick) {
+        g_hash_table_steal(md->groups, group->nick);
+        g_free(group->nick);
+        group->nick = g_strdup(new_nick);
+        g_hash_table_replace(md->groups, group->nick, group);
     }
 }
 
@@ -282,15 +282,15 @@ typedef struct {
         } remove_group;
         struct {
             MrimGroup *group;
-            gchar *new_name;
+            gchar *new_nick;
         } rename_group;
         struct {
-            gchar *name;
+            gchar *email;
             gchar *message;
             guint32 flags;
         } message;
         struct {
-            gchar *name;
+            gchar *email;
         } contact_info;
         struct {
             guint32 unused;
@@ -334,15 +334,15 @@ _mrim_attempt_new(MrimAttempType type, ...)
             break;
         case ATMP_RENAME_GROUP:
             atmp->rename_group.group = va_arg(rest, MrimGroup*);
-            atmp->rename_group.new_name = g_strdup(va_arg(rest, gchar*));
+            atmp->rename_group.new_nick = g_strdup(va_arg(rest, gchar*));
             break;
         case ATMP_MESSAGE:
-            atmp->message.name = g_strdup(va_arg(rest, gchar*));
+            atmp->message.email = g_strdup(va_arg(rest, gchar*));
             atmp->message.message = g_strdup(va_arg(rest, gchar*));
             atmp->message.flags = va_arg(rest, guint32);
             break;
         case ATMP_CONTACT_INFO:
-            atmp->contact_info.name = g_strdup(va_arg(rest, gchar*));
+            atmp->contact_info.email = g_strdup(va_arg(rest, gchar*));
             break;
         case ATMP_CONTACT_SEARCH:
             break;
@@ -374,14 +374,14 @@ _mrim_attempt_destroy(MrimAttempt *atmp)
         case ATMP_REMOVE_GROUP:
             break;
         case ATMP_RENAME_GROUP:
-            g_free(atmp->rename_group.new_name);
+            g_free(atmp->rename_group.new_nick);
             break;
         case ATMP_MESSAGE:
-            g_free(atmp->message.name);
+            g_free(atmp->message.email);
             g_free(atmp->message.message);
             break;
         case ATMP_CONTACT_INFO:
-            g_free(atmp->contact_info.name);
+            g_free(atmp->contact_info.email);
             break;
         case ATMP_CONTACT_SEARCH:
             break;
@@ -714,74 +714,74 @@ mrim_close(PurpleConnection *gc)
 /**************************************************/
 
 static void
-_mrim_add_group(MrimData *md, const gchar *name, const gchar *buddy_to_add, 
+_mrim_add_group(MrimData *md, const gchar *nick, const gchar *buddy_to_add, 
                             const gchar *buddy_to_move)
 {
     guint32 group_count = g_hash_table_size(md->groups);
     MrimGroup *group = NULL;
     MrimAttempt *atmp = NULL;
 
-    group = mrim_group_new(0, 0, name);
+    group = mrim_group_new(0, 0, nick);
 
     mrim_pkt_build_add_contact(md, CONTACT_FLAG_GROUP | (group_count << 24), 0, 
-                                    group->name, group->name);
+                                    group->nick, group->nick);
     _send_out(md);
 
     atmp = _mrim_attempt_new(ATMP_ADD_GROUP, group, buddy_to_add, buddy_to_move);
     g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
 
     purple_debug_info("mrim", "{%u} adding group %s\n\tpending add %s pending move %s\n", 
-                            (guint) md->tx_seq, group->name, buddy_to_add, buddy_to_move);
+                            (guint) md->tx_seq, group->nick, buddy_to_add, buddy_to_move);
 }
 
 static void
-_mrim_rename_group(MrimData *md, const gchar *old_name, const gchar *new_name)
+_mrim_rename_group(MrimData *md, const gchar *old_nick, const gchar *new_nick)
 {
     MrimGroup *group = NULL;
     MrimAttempt *atmp = NULL;
 
-    if (!g_hash_table_lookup_extended(md->groups, old_name, NULL, (gpointer*) &group)) {
+    if (!g_hash_table_lookup_extended(md->groups, old_nick, NULL, (gpointer*) &group)) {
         purple_debug_info("mrim", "rename group: failed to find group in contact list for %s\n", 
-                                        old_name);
+                                        old_nick);
         return;
     }
 
-    mrim_pkt_build_modify_contact(md, group->id, group->flags | CONTACT_FLAG_GROUP, 0, new_name, new_name);
+    mrim_pkt_build_modify_contact(md, group->id, group->flags | CONTACT_FLAG_GROUP, 0, new_nick, new_nick);
     _send_out(md);
 
-    atmp = _mrim_attempt_new(ATMP_RENAME_GROUP, group, new_name);
+    atmp = _mrim_attempt_new(ATMP_RENAME_GROUP, group, new_nick);
     g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp); 
 
     purple_debug_info("mrim", "{%u} renaming group %u from %s to %s\n", (guint) md->tx_seq,
-                                group->id, group->name, new_name);
+                                group->id, group->nick, new_nick);
 }
 
 void 
-mrim_rename_group(PurpleConnection *gc, const char *old_name, PurpleGroup *group, GList *moved_buddies)
+mrim_rename_group(PurpleConnection *gc, const char *old_nick, PurpleGroup *group, GList *moved_buddies)
 {
-    _mrim_rename_group((MrimData*) gc->proto_data, old_name, purple_group_get_name(group));
+    _mrim_rename_group((MrimData*) gc->proto_data, old_nick, purple_group_get_name(group));
 }
 
 /* Removes group from a server */ 
 static void
-_mrim_remove_group(MrimData *md, const gchar *name)
+_mrim_remove_group(MrimData *md, const gchar *nick)
 {
     MrimGroup *group = NULL;
     MrimAttempt *atmp = NULL;
 
-    if (!g_hash_table_lookup_extended(md->groups, name, NULL, (gpointer*) &group)) {
-        purple_debug_error("mrim", "remove group: failed to find group in contact list %s\n", name);
+    if (!g_hash_table_lookup_extended(md->groups, nick, NULL, (gpointer*) &group)) {
+        purple_debug_error("mrim", "remove group: failed to find group in contact list %s\n", nick);
         return;
     }
 
     mrim_pkt_build_modify_contact(md, group->id, group->flags | CONTACT_FLAG_REMOVED | CONTACT_FLAG_GROUP, 0, 
-                                group->name, group->name);
+                                group->nick, group->nick);
     _send_out(md);
 
     atmp = _mrim_attempt_new(ATMP_REMOVE_GROUP, group);
     g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
 
-    purple_debug_info("mrim", "{%u} removing group %s\n", (guint) md->tx_seq, group->name);
+    purple_debug_info("mrim", "{%u} removing group %s\n", (guint) md->tx_seq, group->nick);
 }
 
 void 
@@ -832,10 +832,10 @@ mrim_send_im(PurpleConnection *gc, const gchar *who, const gchar *message, Purpl
 }
 
 unsigned int 
-mrim_send_typing(PurpleConnection *gc, const char *name, PurpleTypingState state)
+mrim_send_typing(PurpleConnection *gc, const char *email, PurpleTypingState state)
 {
     if (state = PURPLE_TYPING) {
-        _mrim_send_message((MrimData*) gc->proto_data, name, " ", 
+        _mrim_send_message((MrimData*) gc->proto_data, email, " ", 
                             MESSAGE_FLAG_NOTIFY|MESSAGE_FLAG_NORECV);
         return MRIM_TYPING_TIMEOUT;
     }
@@ -850,15 +850,15 @@ mrim_send_typing(PurpleConnection *gc, const char *name, PurpleTypingState state
 
 typedef struct {
     MrimData *md;
-    gchar *name;
+    gchar *email;
 } MrimAuthParams;
 
 static MrimAuthParams*
-_mrim_auth_params_new(MrimData *md, const gchar* name)
+_mrim_auth_params_new(MrimData *md, const gchar* email)
 {
     MrimAuthParams *params = g_new0(MrimAuthParams, 1);
     params->md = md;
-    params->name = g_strdup(name);
+    params->email = g_strdup(email);
     return params;
 }
 
@@ -866,7 +866,7 @@ static void
 _mrim_auth_params_free(MrimAuthParams *params)
 {
     if (params) {
-        g_free(params->name);
+        g_free(params->email);
         g_free(params);
     }
 }
@@ -875,39 +875,15 @@ static void
 _mrim_request_authorization_cb(gpointer ptr, gchar *message)
 {
     MrimAuthParams *params = (MrimAuthParams*) ptr;
-    _mrim_send_message(params->md, params->name, message, MESSAGE_FLAG_AUTHORIZE);
+    _mrim_send_message(params->md, params->email, message, MESSAGE_FLAG_AUTHORIZE);
     _mrim_auth_params_free(params);
 }
 
 static void
-_mrim_request_authorization_dialog(MrimData *md, const gchar *name)
+_mrim_request_authorization_dialog(MrimData *md, const gchar *email)
 {
-    /* Note: this version of protocol does not support custom
-    authorization messages. So we will not show the dialog.
-    We will send auth request directly and show notification */
-
-    /*
-    purple_request_input(md->account->gc, 
-        "Requesting authorization", 
-        "Enter message for request authorization", 
-        NULL, 
-        "Please, authorize me",
-        TRUE, 
-        FALSE, 
-        NULL,
-        "Request authorization",
-        G_CALLBACK(_mrim_request_authorization_cb),
-        "Cancel",
-        NULL,
-        md->account,
-        name,
-        NULL,
-        _mrim_auth_params_new(md, name)
-    );
-    */
-
-     gchar *msg = g_strdup_printf("Request was sent to %s", name);
-    _mrim_send_message(md, name, " ", MESSAGE_FLAG_AUTHORIZE);
+     gchar *msg = g_strdup_printf("Request was sent to %s", email);
+    _mrim_send_message(md, email, " ", MESSAGE_FLAG_AUTHORIZE);
     purple_notify_info(md->account->gc, "Authorization", msg, NULL);
     g_free(msg);
 }
@@ -916,24 +892,24 @@ static void
 _mrim_request_authorization_menu_cb(PurpleBlistNode *node, gpointer ptr)
 {
     MrimAuthParams *params = (MrimAuthParams*) ptr;
-    _mrim_request_authorization_dialog(params->md, params->name);
+    _mrim_request_authorization_dialog(params->md, params->email);
     _mrim_auth_params_free(params);
 }
 
 static void
-_mrim_authorize(MrimData *md, const gchar *name)
+_mrim_authorize(MrimData *md, const gchar *email)
 {
-    mrim_pkt_build_authorize(md, name);
+    mrim_pkt_build_authorize(md, email);
     _send_out(md);
 
-    purple_debug_info("mrim", "{%u} authorizing %s\n", (guint) md->tx_seq, name);
+    purple_debug_info("mrim", "{%u} authorizing %s\n", (guint) md->tx_seq, email);
 }
 
 static void
 _mrim_authorize_cb(gpointer ptr)
 {
     MrimAuthParams *params = (MrimAuthParams*) ptr;
-    _mrim_authorize(params->md, params->name);
+    _mrim_authorize(params->md, params->email);
     _mrim_auth_params_free(params);
 }
 
@@ -943,7 +919,7 @@ _mrim_authorize_cb(gpointer ptr)
 
 typedef struct {
     MrimData *md;
-    gchar *name;
+    gchar *email;
     gchar *url;
     guint fails;
 } MrimAvatarRequest;
@@ -967,15 +943,15 @@ _mrim_fetch_avatar_cb(PurpleUtilFetchUrlData *url_data, gpointer user_data,
     MrimAvatarRequest *ar = (MrimAvatarRequest*) user_data;
     if (url_text) {
         void *img = g_memdup(url_text, len);
-        purple_buddy_icon_new(ar->md->account, ar->name, img, len, NULL);
+        purple_buddy_icon_new(ar->md->account, ar->email, img, len, NULL);
         // TODO : need we free img structure
-        g_free(ar->name);
+        g_free(ar->email);
         g_free(ar->url);
         g_free(ar);
     }
     else {
         ar->fails++;
-        purple_debug_info("mrim", "avatar download failed %u times for %s: %s\n", ar->fails, ar->name, error_message);
+        purple_debug_info("mrim", "avatar download failed %u times for %s: %s\n", ar->fails, ar->email, error_message);
         if (++ar->fails < MRIM_AVATAR_MAX_FAILS) {
             guint delay = rand() / RAND_MAX * MRIM_AVATAR_DELAY;
             purple_timeout_add(delay, _mrim_fetch_avatar_delayed, ar); 
@@ -984,13 +960,13 @@ _mrim_fetch_avatar_cb(PurpleUtilFetchUrlData *url_data, gpointer user_data,
 }
 
 static void
-_mrim_fetch_avatar(MrimData *md, const gchar *name)
+_mrim_fetch_avatar(MrimData *md, const gchar *email)
 {
-    gchar* box = g_strdup(name);
+    gchar* box = g_strdup(email);
     gchar* at  = g_strstr_len(box, -1, "@");
     gchar* dot = g_strstr_len(at, -1, ".");
     if (!at || !dot) {
-        purple_debug_warning("mrim", "failed to parse email %s", name);
+        purple_debug_warning("mrim", "failed to parse email %s", email);
         return;
     }
     gchar* domain = at + 1;
@@ -998,7 +974,7 @@ _mrim_fetch_avatar(MrimData *md, const gchar *name)
 
     MrimAvatarRequest *ar = g_new0(MrimAvatarRequest, 1);
     ar->md = md;
-    ar->name = g_strdup(name);
+    ar->email = g_strdup(email);
     ar->url = g_strconcat("http://obraz.foto.mail.ru/", domain, "/", box, "/_mrimavatarsmall", NULL);
     g_free(box);
 
@@ -1054,26 +1030,26 @@ mrim_set_idle(PurpleConnection *gc, int idletime)
 
 
 static void
-_mrim_add_contact(MrimData *md, const gchar *name, const gchar *group_name)
+_mrim_add_contact(MrimData *md, const gchar *email, const gchar *group_nick)
 {
     PurpleBuddy *buddy = NULL;
     MrimContact *contact = NULL;
     MrimAttempt *atmp = NULL;
     MrimGroup *group = NULL;
     
-    if (g_hash_table_lookup_extended(md->contacts, name, NULL, (gpointer*) &contact)) {
+    if (g_hash_table_lookup_extended(md->contacts, email, NULL, (gpointer*) &contact)) {
         purple_debug_info("mrim", "_mrim_add_contact: user %s already exists. " \
-                                    "Requsting authorization\n",  name);
-        _mrim_request_authorization_dialog(md, name);
+                                    "Requsting authorization\n",  email);
+        _mrim_request_authorization_dialog(md, email);
         return;
     }
 
-    if (!g_hash_table_lookup_extended(md->groups, group_name, NULL, (gpointer*) &group)) {
-        _mrim_add_group(md, group_name, name, NULL);
+    if (!g_hash_table_lookup_extended(md->groups, group_nick, NULL, (gpointer*) &group)) {
+        _mrim_add_group(md, group_nick, email, NULL);
         return;
     }
-    if (!(buddy = purple_find_buddy(md->account, name))) {
-        purple_debug_error("mrim", "_mrim_add_contact: failed to find buddy for %s\n", name);
+    if (!(buddy = purple_find_buddy(md->account, email))) {
+        purple_debug_error("mrim", "_mrim_add_contact: failed to find buddy for %s\n", email);
         return;
     }
     
@@ -1082,13 +1058,13 @@ _mrim_add_contact(MrimData *md, const gchar *name, const gchar *group_name)
     
     atmp = _mrim_attempt_new(ATMP_ADD_CONTACT, contact);
 
-    mrim_pkt_build_add_contact(md, 0, group->id, contact->name, contact->nick);
+    mrim_pkt_build_add_contact(md, 0, group->id, contact->email, contact->nick);
     _send_out(md);
     
     g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
 
     purple_debug_info("mrim", "{%u} adding user %s to group %s (%u)\n", (guint) md->tx_seq, 
-                                    contact->name, group->name, (guint) group->id);
+                                    contact->email, group->nick, (guint) group->id);
 }
 
 void 
@@ -1099,24 +1075,24 @@ mrim_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group)
 }
 
 static void
-_mrim_remove_buddy(MrimData *md, const gchar* name)
+_mrim_remove_buddy(MrimData *md, const gchar* email)
 {
     MrimContact *contact = NULL;
     MrimAttempt *atmp = NULL;
 
-    if (!g_hash_table_lookup_extended(md->contacts, name, NULL, (gpointer*) &contact)) {
-        purple_debug_error("mrim", "remove buddy: failed to find mrim contact for %s\n", name);
+    if (!g_hash_table_lookup_extended(md->contacts, email, NULL, (gpointer*) &contact)) {
+        purple_debug_error("mrim", "remove buddy: failed to find mrim contact for %s\n", email);
         return;
     }
 
     mrim_pkt_build_modify_contact(md, contact->id, contact->flags | CONTACT_FLAG_REMOVED, 
-                                    contact->group_id, contact->name, contact->nick);
+                                    contact->group_id, contact->email, contact->nick);
     _send_out(md);
 
     atmp = _mrim_attempt_new(ATMP_REMOVE_CONTACT, contact);
     g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
 
-    purple_debug_info("mrim", "{%u} removing user %s\n", (guint) md->tx_seq, contact->name);
+    purple_debug_info("mrim", "{%u} removing user %s\n", (guint) md->tx_seq, contact->email);
 }
 
 void 
@@ -1126,24 +1102,24 @@ mrim_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group)
 }
 
 static void
-_mrim_alias_buddy(MrimData *md, const gchar *name, const gchar *old_alias, const gchar *new_alias)
+_mrim_alias_buddy(MrimData *md, const gchar *email, const gchar *old_nick, const gchar *new_nick)
 {
     MrimContact *contact = NULL;
     MrimAttempt *atmp = NULL;
 
-    if (!g_hash_table_lookup_extended(md->contacts, name, NULL, (gpointer*) &contact)) {
-        purple_debug_error("mrim", "renaming buddy: failed to find mrim user for %s\n", name);
+    if (!g_hash_table_lookup_extended(md->contacts, email, NULL, (gpointer*) &contact)) {
+        purple_debug_error("mrim", "renaming buddy: failed to find mrim user for %s\n", email);
         return;
     }
 
-    mrim_pkt_build_modify_contact(md, contact->id, contact->flags, contact->group_id, contact->name, new_alias);
+    mrim_pkt_build_modify_contact(md, contact->id, contact->flags, contact->group_id, contact->email, new_nick);
     _send_out(md);
 
-    atmp = _mrim_attempt_new(ATMP_RENAME_CONTACT, contact, new_alias);
+    atmp = _mrim_attempt_new(ATMP_RENAME_CONTACT, contact, new_nick);
     g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
 
     purple_debug_info("mrim", "{%u} renaming user %s (%u) to %s\n", (guint) md->tx_seq, 
-                                contact->name, contact->id, new_alias);
+                                contact->email, contact->id, new_nick);
 }
 
 void 
@@ -1153,36 +1129,36 @@ mrim_alias_buddy(PurpleConnection *gc, const char *who, const char *alias)
 }
 
 static void
-_mrim_group_buddy(MrimData *md, const gchar *name, const gchar *old_group, const gchar *new_group)
+_mrim_group_buddy(MrimData *md, const gchar *email, const gchar *old_group, const gchar *new_group)
 {
     MrimContact *contact = NULL;
     MrimGroup *group = NULL;
     MrimAttempt *atmp = NULL;
 
-    if (!g_hash_table_lookup_extended(md->contacts, name, NULL, (gpointer*) &contact)) {
-        purple_debug_error("mrim", "group_buddy: failed to find mrim contact for %s\n", name);
+    if (!g_hash_table_lookup_extended(md->contacts, email, NULL, (gpointer*) &contact)) {
+        purple_debug_error("mrim", "group_buddy: failed to find mrim contact for %s\n", email);
         return;
     }
     if (!g_hash_table_lookup_extended(md->groups, new_group, NULL, (gpointer*) &group)) {
-        _mrim_add_group(md, new_group, NULL, name);
+        _mrim_add_group(md, new_group, NULL, email);
         return;
     }
 
-    mrim_pkt_build_modify_contact(md, contact->id, contact->flags, group->id, contact->name, contact->nick);
+    mrim_pkt_build_modify_contact(md, contact->id, contact->flags, group->id, contact->email, contact->nick);
     _send_out(md);
 
     atmp = _mrim_attempt_new(ATMP_MOVE_CONTACT, contact, group);
     g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
 
     purple_debug_info("mrim", "{%u} moving user %s to group %s (%u)\n", (guint) md->tx_seq, 
-                                contact->name, group->name, (guint) group->id);
+                                contact->email, group->nick, (guint) group->id);
 }
 
 void 
-mrim_group_buddy(PurpleConnection *gc, const gchar *name, 
+mrim_group_buddy(PurpleConnection *gc, const gchar *email, 
                                         const gchar *old_group, const gchar *new_group)
 {
-    _mrim_group_buddy((MrimData*) gc->proto_data, name, old_group, new_group);
+    _mrim_group_buddy((MrimData*) gc->proto_data, email, old_group, new_group);
 }
 
 /**************************************************/
@@ -1195,25 +1171,22 @@ mrim_join_chat(PurpleConnection *gc, GHashTable *components)
     MrimData *md = (MrimData*) gc->proto_data;
     PurpleChat *chat = NULL;
     PurpleConversation *conv = NULL;
-    gchar *name = g_hash_table_lookup(components, "name");
-    gchar *tmpid = g_hash_table_lookup(components, "tmpid");
-    if (name) {
-        chat = _purple_find_chat_by_component(md->account, "name", name);
-        conv = serv_got_joined_chat(gc, 0, name);
-        mrim_pkt_build_chat_get_members(md, 0, name);
+    gchar *email = g_hash_table_lookup(components, "email");
+    if (email) {
+        chat = _purple_find_chat_by_component(md->account, "email", email);
+        conv = serv_got_joined_chat(gc, 0, email);
+        mrim_pkt_build_chat_get_members(md, 0, email);
         _send_out(md);
     }
-    else if (tmpid) {
+    else {
+        gchar* tmpid = g_malloc0(20);
+        sprintf(tmpid, "%d", rand());
+        g_hash_table_replace(components, g_strdup("tmpid"), tmpid);
         chat = _purple_find_chat_by_component(md->account, "tmpid", tmpid);
-        mrim_pkt_build_add_contact(md, CONTACT_FLAG_MULTICHAT, 0, "", purple_chat_get_name(chat));
+        mrim_pkt_build_add_chat(md, CONTACT_FLAG_MULTICHAT, purple_chat_get_name(chat), FALSE);
         _send_out(md);
         MrimAttempt *atmp = _mrim_attempt_new(ATMP_ADD_CHAT, tmpid);
         g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
-        // TODO: from here
-    }
-    else {
-        purple_debug_error("mrim", "mrim_join_chat: joining the chat, that has neither name neither tmpid\n");
-        return;
     }
 }
 
@@ -1271,7 +1244,7 @@ _chat_dispatch_members(MrimData *md, MrimPktMessageAck *pkt, MrimPktChatMembers 
     if (!(conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, 
                                         pkt->from, md->account)))
     {
-        purple_debug_warning("mrim", "_chat_dispatch_members: no chat conversation for name %s\n",
+        purple_debug_warning("mrim", "_chat_dispatch_members: no chat conversation for email %s\n",
                                         pkt->from);
         return;
     }
@@ -1460,11 +1433,11 @@ _dispatch_message_status(MrimData *md, MrimPktMessageStatus *pkt)
 
     if (pkt->status == MESSAGE_DELIVERED) {
         if (!(atmp->message.flags & noecho_flags)) {
-            conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, atmp->message.name, md->account);
+            conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, atmp->message.email, md->account);
             if (!conv) {
-                conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, atmp->message.name);
+                conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, atmp->message.email);
             }
-            purple_conversation_write(conv, atmp->message.name, atmp->message.message, PURPLE_MESSAGE_SEND, time(NULL));
+            purple_conversation_write(conv, atmp->message.email, atmp->message.message, PURPLE_MESSAGE_SEND, time(NULL));
         }
         g_hash_table_remove(md->attempts, (gpointer) pkt->header.seq);
     }
@@ -1562,12 +1535,12 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
     if (atmp->type == ATMP_ADD_GROUP) {
         group = atmp->add_group.group;
         if (pkt->status == CONTACT_OPER_SUCCESS) {
-            g_hash_table_replace(md->groups, group->name, group);
+            g_hash_table_replace(md->groups, group->nick, group);
             if (atmp->add_group.buddy_to_add) {
-                _mrim_add_contact(md, atmp->add_group.buddy_to_add, group->name);
+                _mrim_add_contact(md, atmp->add_group.buddy_to_add, group->nick);
             }
             else if (atmp->add_group.buddy_to_move) {
-                _mrim_group_buddy(md, atmp->add_group.buddy_to_move, NULL, group->name);
+                _mrim_group_buddy(md, atmp->add_group.buddy_to_move, NULL, group->nick);
             }
         }
         else if (pkt->status == CONTACT_OPER_USER_EXISTS) {
@@ -1577,7 +1550,7 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
         else {
             purple_notify_error(md->account->gc, "Adding group", 
                                         "Failed to create group on server", reason);
-            purple_blist_remove_group(purple_find_group(group->name));
+            purple_blist_remove_group(purple_find_group(group->nick));
             _mrim_group_destroy(group);
         }
     }
@@ -1586,32 +1559,34 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
         contact = atmp->add_contact.contact;
         if (pkt->status == CONTACT_OPER_SUCCESS) {
             contact->id = pkt->contact_id;
-            g_hash_table_replace(md->contacts, contact->name, contact);
+            g_hash_table_replace(md->contacts, contact->email, contact);
         }
         else if (pkt->status == CONTACT_OPER_USER_EXISTS) {
-            purple_debug_info("mrim", "user already %s existed\n", contact->name);
+            purple_debug_info("mrim", "user already %s existed\n", contact->email);
             _mrim_contact_destroy(contact);
         }
         else {
             purple_notify_error(md->account->gc, "Adding user", 
                                         "Failed to create user on server", reason);
-            purple_blist_remove_buddy(purple_find_buddy(md->account, contact->name));
+            purple_blist_remove_buddy(purple_find_buddy(md->account, contact->email));
             _mrim_contact_destroy(contact);
         }
     }
 
     else if (atmp->type == ATMP_ADD_CHAT) {
+        PurpleChat *chat = _purple_find_chat_by_component(md->account, "tmpid", atmp->add_chat.tmpid);
         if (pkt->status == CONTACT_OPER_SUCCESS) {
-            //contact = mrim_contact_new(pkt->contact_id, 0, CONTACT_FLAG_MULTICHAT, STATUS_ONLINE, 0,
-            //                           "??", "??");
-            // TODO: form here
-        
+            contact = mrim_contact_new(pkt->contact_id, 0, CONTACT_FLAG_MULTICHAT, STATUS_ONLINE, 0,
+                                       pkt->contact_email, purple_chat_get_name(chat));
+            g_hash_table_replace(md->contacts, contact->email, contact);
+            GHashTable *components = purple_chat_get_components(chat);
+            g_hash_table_replace(components, g_strdup("email"), g_strdup(pkt->contact_email));
+            mrim_join_chat(md->account->gc, components);
         }
         else {
             purple_notify_error(md->account->gc, "Adding chat", 
                                         "Failed to create chat on server", reason);
-            purple_blist_remove_chat(_purple_find_chat_by_component(md->account, 
-                                        "tmpid", atmp->add_chat.tmpid));
+            purple_blist_remove_chat(chat);
         }
     }
     
@@ -1638,7 +1613,7 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
 
     if (atmp->type == ATMP_REMOVE_GROUP) {
         if (pkt->status == CONTACT_OPER_SUCCESS) {
-            g_hash_table_remove(md->groups, atmp->remove_group.group->name);
+            g_hash_table_remove(md->groups, atmp->remove_group.group->nick);
         }
         else {
             purple_notify_error(md->account->gc, "Removing group", 
@@ -1648,7 +1623,7 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
 
     else if (atmp->type == ATMP_RENAME_GROUP) {
         if (pkt->status == CONTACT_OPER_SUCCESS) {
-            _mrim_group_rename(md, atmp->rename_group.group, atmp->rename_group.new_name);
+            _mrim_group_rename(md, atmp->rename_group.group, atmp->rename_group.new_nick);
         }
         else {
             purple_notify_error(md->account->gc, "Modifing group",
@@ -1659,7 +1634,7 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
 
     else if (atmp->type == ATMP_REMOVE_CONTACT) {
         if (pkt->status == CONTACT_OPER_SUCCESS) {
-            g_hash_table_remove(md->contacts, atmp->remove_contact.contact->name);
+            g_hash_table_remove(md->contacts, atmp->remove_contact.contact->email);
         }
         else {
             purple_notify_error(md->account->gc, "Removing user", 
@@ -1720,7 +1695,7 @@ _dispatch_authorize_ack(MrimData *md, MrimPktAuthorizeAck *pkt)
 
     if (g_hash_table_lookup_extended(md->contacts, pkt->email, NULL, (gpointer*) &contact)) {
         contact->server_flags &= !CONTACT_INTFLAG_NOT_AUTHORIZED;
-        msg = g_strdup_printf("You were authorized by %s", contact->name);
+        msg = g_strdup_printf("You were authorized by %s", contact->email);
         purple_notify_info(md->account->gc, "Authorization", msg, NULL);
         g_free(msg);
     }
@@ -1757,7 +1732,7 @@ _dispatch_logout(MrimData *md, MrimPktLogout *pkt)
 }
 
 static void
-_dispatch_contact_info(MrimData *md, gchar *name, MrimPktAnketaInfo *pkt)
+_dispatch_contact_info(MrimData *md, gchar *email, MrimPktAnketaInfo *pkt)
 {
     GHashTable *user = NULL;
     gchar *key = NULL, *val = NULL;
@@ -1765,8 +1740,8 @@ _dispatch_contact_info(MrimData *md, gchar *name, MrimPktAnketaInfo *pkt)
 
     if (pkt->status == MRIM_ANKETA_INFO_STATUS_OK && pkt->users) {
 
-        purple_notify_user_info_add_pair(user_info, "E-mail", name);
-        gchar **nd = g_strsplit(name, "@", 2);
+        purple_notify_user_info_add_pair(user_info, "E-mail", email);
+        gchar **nd = g_strsplit(email, "@", 2);
         gchar **parts = g_strsplit(nd[1], ".", 2);
         gchar *myworld_url = g_strdup_printf("http://my.mail.ru/%s/%s/", parts[0], nd[0]);
         gchar *blog_url =  g_strdup_printf("http://blogs.mail.ru/%s/%s/", parts[0], nd[0]);
@@ -1816,10 +1791,10 @@ _dispatch_contact_info(MrimData *md, gchar *name, MrimPktAnketaInfo *pkt)
     }
     else {
         purple_notify_user_info_add_pair(user_info, NULL, "Failed to load contact info");
-        purple_debug_error("mrim", "Failed to load contact info for %s\n", name);
+        purple_debug_error("mrim", "Failed to load contact info for %s\n", email);
     }
     
-    purple_notify_userinfo(md->account->gc, name, user_info, NULL, NULL);
+    purple_notify_userinfo(md->account->gc, email, user_info, NULL, NULL);
     purple_notify_user_info_destroy(user_info);
 }
 
@@ -1837,7 +1812,7 @@ _dispatch_anketa_info(MrimData *md, MrimPktAnketaInfo* pkt)
 
     if (g_hash_table_lookup_extended(md->attempts, (gpointer) pkt->header.seq, NULL, (gpointer*) &atmp)) {
         if (atmp->type == ATMP_CONTACT_INFO) {
-            _dispatch_contact_info(md, atmp->contact_info.name, pkt);
+            _dispatch_contact_info(md, atmp->contact_info.email, pkt);
         }
         else if (atmp->type == ATMP_CONTACT_SEARCH) {
             _dispatch_search_results(md, pkt);
@@ -1876,16 +1851,16 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     for (item = g_list_first(pkt->groups); item; item = g_list_next(item)) {
         mgroup = (MrimGroup*) item->data;
         if (!(mgroup->flags & CONTACT_FLAG_REMOVED)) {
-            if (!(group = purple_find_group(mgroup->name))) {
-                group = purple_group_new(mgroup->name);
+            if (!(group = purple_find_group(mgroup->nick))) {
+                group = purple_group_new(mgroup->nick);
                 purple_blist_add_group(group, NULL);
             }
-            g_hash_table_replace(md->groups, mgroup->name, mgroup);
+            g_hash_table_replace(md->groups, mgroup->nick, mgroup);
             purple_debug_info("mrim", "contact_list: group: [%u] %s [flags: %u]\n", 
-                                        mgroup->id, mgroup->name, mgroup->flags);
+                                        mgroup->id, mgroup->nick, mgroup->flags);
         }
         else {
-            purple_debug_misc("mrim", "contact_list: group: [%u] %s [removed]\n", mgroup->id, mgroup->name);
+            purple_debug_misc("mrim", "contact_list: group: [%u] %s [removed]\n", mgroup->id, mgroup->nick);
         }
     }
 
@@ -1895,40 +1870,40 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
         if (!(contact->flags & CONTACT_FLAG_REMOVED)) {
             mgroup = _mrim_contact_get_group(md, contact);
             if (mgroup && !(mgroup->flags & CONTACT_FLAG_REMOVED)) {
-                group = purple_find_group(mgroup->name);
+                group = purple_find_group(mgroup->nick);
             }
             else {
                 group = NULL;
             }
-            g_hash_table_replace(md->contacts, contact->name, contact);
-            if (is_chat_email(contact->name)) {
-                while (chat = _purple_find_chat_by_component(md->account, "name", contact->name)) {
+            g_hash_table_replace(md->contacts, contact->email, contact);
+            if (is_chat_email(contact->email)) {
+                while (chat = _purple_find_chat_by_component(md->account, "email", contact->email)) {
                     purple_blist_remove_chat(chat);
                 }
                 GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-                g_hash_table_replace(components, g_strdup("name"), g_strdup(contact->name));
+                g_hash_table_replace(components, g_strdup("email"), g_strdup(contact->email));
                 chat = purple_chat_new(md->account, contact->nick, components);
                 purple_blist_add_chat(chat, NULL, NULL);
             }
             else {
-                if (buddy = purple_find_buddy(md->account, contact->name)) {
+                if (buddy = purple_find_buddy(md->account, contact->email)) {
                     purple_blist_remove_buddy(buddy);
                 }
-                buddy = purple_buddy_new(md->account, contact->name, contact->nick);
+                buddy = purple_buddy_new(md->account, contact->email, contact->nick);
                 purple_blist_add_buddy(buddy, NULL, group, NULL);
-                purple_prpl_got_user_status(md->account, contact->name, 
+                purple_prpl_got_user_status(md->account, contact->email, 
                                         _status_mrim2purple(contact->status), NULL);
             }
             purple_debug_info("mrim", "contact_list: %s: [%u] %s (%s) [group %u flags %u server flags %u]\n", 
-                                       is_chat_email(contact->name) ? "chat" : "contact",
-                                       contact->id, contact->name, contact->nick, contact->group_id, 
+                                       is_chat_email(contact->email) ? "chat" : "contact",
+                                       contact->id, contact->email, contact->nick, contact->group_id, 
                                        contact->flags, contact->server_flags);
-            _mrim_fetch_avatar(md, contact->name);
+            _mrim_fetch_avatar(md, contact->email);
         }
         else {
             purple_debug_misc("mrim", "contact_list: %s: [%u] %s (%s) [removed]\n",
-                                       is_chat_email(contact->name) ? "chat" : "contact",
-                                       contact->id, contact->name, contact->nick);
+                                       is_chat_email(contact->email) ? "chat" : "contact",
+                                       contact->id, contact->email, contact->nick);
         }
     }
 
@@ -1946,9 +1921,9 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
             if (PURPLE_BLIST_NODE_IS_CHAT(node)) {
                 chat = (PurpleChat*) node;
                 GHashTable *components = purple_chat_get_components(chat);
-                gchar *name = g_hash_table_lookup(components, "name");
-                if (md->account == purple_chat_get_account(chat) && name
-                    && !g_hash_table_lookup(md->contacts, name))
+                gchar *email = g_hash_table_lookup(components, "email");
+                if (md->account == purple_chat_get_account(chat) && email
+                    && !g_hash_table_lookup(md->contacts, email))
                 {
                     purple_blist_remove_chat(chat);
                 }
@@ -2092,7 +2067,7 @@ mrim_blist_node_menu(PurpleBlistNode *node)
         if (contact = _mrim_contact_from_buddy(PURPLE_BUDDY(node))) {
             if (contact->server_flags & CONTACT_INTFLAG_NOT_AUTHORIZED) {
                 md = _mrim_data_from_buddy(PURPLE_BUDDY(node));
-                params = _mrim_auth_params_new(md, contact->name);
+                params = _mrim_auth_params_new(md, contact->email);
                 action = purple_menu_action_new("Request authorization", 
                     G_CALLBACK(_mrim_request_authorization_menu_cb), params, NULL);
                 list = g_list_append(list, action);
@@ -2106,15 +2081,17 @@ mrim_blist_node_menu(PurpleBlistNode *node)
 GList*
 mrim_chat_info(PurpleConnection *gc)
 {
+//TODO: form here
     struct proto_chat_entry *entry = g_new0(struct proto_chat_entry, 1);
-    entry->label = "DoNotChange";
-    entry->identifier = "tmpid";
-    entry->required = TRUE;
+    entry->label = "Email";
+    entry->identifier = "email";
+    entry->required = FALSE;
     entry->is_int = FALSE;
     entry->secret = FALSE;
     return g_list_append(NULL, entry);
 }
 
+/*
 GHashTable*
 mrim_chat_info_defaults(PurpleConnection *gc, const gchar *name)
 {
@@ -2124,6 +2101,7 @@ mrim_chat_info_defaults(PurpleConnection *gc, const gchar *name)
     g_hash_table_insert(table, "tmpid", random);
     return table;
 }
+*/
 
 gboolean 
 mrim_offline_message(const PurpleBuddy *buddy)

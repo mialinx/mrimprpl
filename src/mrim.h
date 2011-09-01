@@ -12,7 +12,7 @@
 typedef struct {
     guint32 id;
     guint32 flags;
-    gchar *name;
+    gchar *nick;
 } MrimGroup;
 
 typedef struct {
@@ -21,16 +21,16 @@ typedef struct {
     guint32 server_flags;
     guint32 status;
     guint32 group_id;
-    gchar *name;
+    gchar *email;
     gchar *nick;
 } MrimContact;
 
 MrimGroup*
-mrim_group_new(const guint32 id, const guint32 flags, const gchar *name);
+mrim_group_new(const guint32 id, const guint32 flags, const gchar *nick);
 
 MrimContact*
 mrim_contact_new(const guint32 id, const guint32 flags, const guint32 server_flags, 
-            const guint32 status, const guint32 group_id, const gchar *name, const gchar *nick);
+            const guint32 status, const guint32 group_id, const gchar *email, const gchar *nick);
 
 typedef struct {
 
@@ -102,7 +102,7 @@ void
 mrim_set_info(PurpleConnection *gc, const char *info);
 
 unsigned int
-mrim_send_typing(PurpleConnection *gc, const char *name, PurpleTypingState state);
+mrim_send_typing(PurpleConnection *gc, const char *email, PurpleTypingState state);
 
 void
 mrim_get_info(PurpleConnection *gc, const char *who);
@@ -129,7 +129,7 @@ void
 mrim_group_buddy(PurpleConnection *gc, const char *who, const char *old_group, const char *new_group);
 
 void
-mrim_rename_group(PurpleConnection *gc, const char *old_name, PurpleGroup *group, GList *moved_buddies);
+mrim_rename_group(PurpleConnection *gc, const char *old_nick, PurpleGroup *group, GList *moved_buddies);
 
 const char *
 mrim_normalize(const PurpleAccount *account, const char *who);
