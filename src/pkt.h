@@ -7,6 +7,10 @@
 
 typedef mrim_packet_header_t MrimPktHeader;
 typedef gchar* Uidl;
+typedef struct {
+    guint32 dlen;
+    guint32 type;
+} MrimPktChatHeader;
 
 /* Common routines */
 void
@@ -37,6 +41,9 @@ mrim_pkt_build_modify_contact(MrimData *md, guint32 id, guint32 flags, guint32 g
 void
 mrim_pkt_build_message(MrimData *md, guint32 flags, const gchar *to, const gchar *message, 
                     const gchar *rtf_message);
+
+void
+mrim_pkt_build_chat_get_members(MrimData *md, guint32 flags, const gchar* name);
 
 void
 mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id);
@@ -111,75 +118,36 @@ typedef struct {
     gchar *from;
     gchar *message;
     gchar *rtf_message;
+    MrimPktChatHeader *multichat;
 } MrimPktMessageAck;
 
 /* chat */
 typedef struct {
-    MrimPktHeader header;
-    guint32 msg_id;
-    guint32 flags;
-    gchar *from;
-    gchar *message;
-    gchar *rtf_message;
-    gchar *multichat_name;
+    MrimPktChatHeader header;
     gchar *sender;
-} MrimPktMultichatMessage;
+} MrimPktChatMessage;
 
 typedef struct {
-    MrimPktHeader header;
-    guint32 msg_id;
-    guint32 flags;
-    gchar *from;
-    gchar *message;
-    gchar *rtf_message;
-    gchar *multichat_name;
+    MrimPktChatHeader header;
+    gchar *name;
     GList *members;
-} MrimPktMultichatMembers;
+} MrimPktChatMembers;
 
 typedef struct {
-    MrimPktHeader header;
-    guint32 msg_id;
-    guint32 flags;
-    gchar *from;
-    gchar *message;
-    gchar *rtf_message;
-    gchar *multichat_name;
+    MrimPktChatHeader header;
     gchar *sender;
     GList *members;
-} MrimPktMultichatAddMembers;
+} MrimPktChatAddMembers;
 
 typedef struct {
-    MrimPktHeader header;
-    guint32 msg_id;
-    guint32 flags;
-    gchar *from;
-    gchar *message;
-    gchar *rtf_message;
-    gchar *multichat_name;
-    GList *members;
-} MrimPktMultichatAttached;
+    MrimPktChatHeader header;
+    gchar *member;
+} MrimPktChatAttached;
 
 typedef struct {
-    MrimPktHeader header;
-    guint32 msg_id;
-    guint32 flags;
-    gchar *from;
-    gchar *message;
-    gchar *rtf_message;
-    gchar *multichat_name;
-    GList *members;
-} MrimPktMultichatDetached;
-
-typedef struct { // not supported
-    MrimPktHeader header;
-    guint32 msg_id;
-    guint32 flags;
-    gchar *from;
-    gchar *message;
-    gchar *rtf_message;
-    gchar *multichat_name;
-    gchar *sender;
-} MrimPktMultichatInvite;
+    MrimPktChatHeader header;
+    gchar *member;
+} MrimPktChatDetached;
 
 /* /chat */
 
