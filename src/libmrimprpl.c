@@ -23,7 +23,7 @@ static PurplePluginProtocolInfo protocol_info = {
     mrim_status_types,      /* (MUST) returns a list of #PurpleStatusType which exist for this account */
     mrim_blist_node_menu,   /* returns a list of #PurpleMenuAction structs, which represent extra 
                                actions to be shown in (for example) the right-click menu for a node */
-    mrim_chat_info,         /* returns list of options, needed to join the chat */
+    NULL,                   /* chat support */
     NULL,                   /* chat support */
     /* All the server-related functions */
     mrim_login,             /* performs login */
@@ -44,7 +44,7 @@ static PurplePluginProtocolInfo protocol_info = {
     NULL,                   /* void (*rem_permit)(PurpleConnection *, const char *name); */
     NULL,                   /* void (*rem_deny)(PurpleConnection *, const char *name); */
     NULL,                   /* void (*set_permit_deny)(PurpleConnection *); */
-    mrim_join_chat,         /* void (*join_chat)(PurpleConnection *, GHashTable *components); */
+    NULL,                   /* void (*join_chat)(PurpleConnection *, GHashTable *components); */
     NULL,                   /* void (*reject_chat)(PurpleConnection *, GHashTable *components); */
     NULL,                   /* char *(*get_chat_name)(GHashTable *components); */
     NULL,                   /* void (*chat_invite)(PurpleConnection *, int id, const char *message, const char *who); */

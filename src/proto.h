@@ -67,18 +67,8 @@ mrim_packet_header_t;
     #define MESSAGE_FLAG_CONTACT        0x00000200
     #define MESSAGE_FLAG_NOTIFY     0x00000400
     #define MESSAGE_FLAG_MULTICAST      0x00001000
-    #define MESSAGE_FLAG_MULTICHAT      0x00400000
 #define MAX_MULTICAST_RECIPIENTS 50
     #define MESSAGE_USERFLAGS_MASK  0x000036A8  // Flags that user is allowed to set himself
-
-#define MULTICHAT_MESSAGE       0
-#define MULTICHAT_GET_MEMBERS   1
-#define MULTICHAT_MEMBERS       2
-#define MULTICHAT_ADD_MEMBERS   3
-#define MULTICHAT_ATTACHED      4
-#define MULTICHAT_DETACHED      5
-#define MULTICHAT_DESTROYED     6
-#define MULTICHAT_INVITE        7
 
     
 #define MRIM_CS_MESSAGE_ACK     0x1009  // S -> C
@@ -137,7 +127,6 @@ mrim_packet_header_t;
     #define CONTACT_FLAG_VISIBLE    0x00000008
     #define CONTACT_FLAG_IGNORE 0x00000010
     #define CONTACT_FLAG_SHADOW 0x00000020
-    #define CONTACT_FLAG_MULTICHAT  0x00000080
     
 #define MRIM_CS_ADD_CONTACT_ACK         0x101A  // S -> C
     // UL status
