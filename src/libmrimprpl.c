@@ -24,7 +24,7 @@ static PurplePluginProtocolInfo protocol_info = {
     mrim_blist_node_menu,   /* returns a list of #PurpleMenuAction structs, which represent extra 
                                actions to be shown in (for example) the right-click menu for a node */
     mrim_chat_info,         /* returns list of options, needed to join the chat */
-    NULL, //mrim_chat_info_defaults,/* returns hash table with options defaults */
+    NULL,                   /* returns hash table with options defaults */
     /* All the server-related functions */
     mrim_login,             /* performs login */
     mrim_close,             /* performs logout */
@@ -48,7 +48,7 @@ static PurplePluginProtocolInfo protocol_info = {
     NULL,                   /* void (*reject_chat)(PurpleConnection *, GHashTable *components); */
     NULL,                   /* char *(*get_chat_name)(GHashTable *components); */
     NULL,                   /* void (*chat_invite)(PurpleConnection *, int id, const char *message, const char *who); */
-    NULL,                   /* void (*chat_leave)(PurpleConnection *, int id); */
+    mrim_chat_leave,        /* void (*chat_leave)(PurpleConnection *, int id); */
     NULL,                   /* void (*chat_whisper)(PurpleConnection *, int id, const char *who, const char *message); */
     NULL,                   /* int  (*chat_send)(PurpleConnection *, int id, const char *message, PurpleMessageFlags flags); */
     NULL,                   /* send keepalive packet to server */
@@ -65,7 +65,7 @@ static PurplePluginProtocolInfo protocol_info = {
     mrim_remove_group,      /* removes group from a server */
     NULL,                   /* char *(*get_cb_real_name)(PurpleConnection *gc, int id, const char *who); */
     NULL,                   /* void (*set_chat_topic)(PurpleConnection *gc, int id, const char *topic); */
-    NULL,                   /* PurpleChat *(*find_blist_chat)(PurpleAccount *account, const char *name); */
+    mrim_find_blist_chat,   /* PurpleChat *(*find_blist_chat)(PurpleAccount *account, const char *name); */
     
     /* room listing prpl callbacks */
     NULL,                   /* PurpleRoomlist *(*roomlist_get_list)(PurpleConnection *gc); */

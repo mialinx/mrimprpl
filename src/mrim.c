@@ -90,6 +90,30 @@ _mrim_contact_free(gpointer ptr)
     _mrim_contact_destroy((MrimContact*) ptr);
 }
 
+static guint
+_mrim_contact_email2id(MrimData *md, const gchar* email)
+{
+    MrimContact* contact = g_hash_table_lookup(md->contacts, email);
+    return contact ? contact->id : 0;
+}
+
+static gchar*
+_mrim_contact_id2email(MrimData *md, guint id)
+{
+    MrimContact *contact;
+    GList *item = g_hash_table_get_values(md->contacts);
+
+    while (item) {
+        contact = (MrimContact*) item->data;
+        if (contact->id == id) {
+            return contact->email;
+        }
+        item = g_list_next(item);
+    }
+
+    return NULL; 
+}
+
 static MrimGroup*
 _mrim_contact_get_group(MrimData *md, MrimContact *contact)
 {
@@ -121,6 +145,7 @@ _mrim_data_from_buddy(PurpleBuddy *buddy)
     }
     return NULL;
 }
+
 static MrimContact*
 _mrim_contact_from_buddy(PurpleBuddy *buddy) 
 {
@@ -207,12 +232,16 @@ _status_mrim2purple(guint32 mrim_status)
 }
 
 PurpleChat*
-_purple_find_chat_by_component(PurpleAccount *acc, const char *comp_name, const char *comp_val)
+mrim_find_blist_chat(PurpleAccount *account, const char *email)
 {
     PurpleBlistNode *node, *group;
     PurpleChat *chat;
     GHashTable *components;
-    gchar *chat_comp_val;
+    gchar *chat_email;
+
+    if (!email || email[0] == '\0') {
+        return NULL;
+    }
 
     for (group = purple_blist_get_root(); 
          group != NULL; 
@@ -225,9 +254,9 @@ _purple_find_chat_by_component(PurpleAccount *acc, const char *comp_name, const 
             if (PURPLE_BLIST_NODE_IS_CHAT(node)) {
                 chat = (PurpleChat*) node;
                 components = purple_chat_get_components(chat);
-                chat_comp_val = g_hash_table_lookup(components, comp_name);
-                if (acc == purple_chat_get_account(chat) 
-                    && chat_comp_val && comp_val && !strcmp(chat_comp_val, comp_val)) 
+                chat_email = g_hash_table_lookup(components, "email");
+                if (account == purple_chat_get_account(chat) 
+                    && chat_email && email && !strcmp(chat_email, email)) 
                 {
                     return chat;
                 }
@@ -296,7 +325,7 @@ typedef struct {
             guint32 unused;
         } contact_search;
         struct {
-            gchar *tmpid;
+            gchar *email;
         } add_chat;
     };
 } MrimAttempt;
@@ -347,7 +376,7 @@ _mrim_attempt_new(MrimAttempType type, ...)
         case ATMP_CONTACT_SEARCH:
             break;
         case ATMP_ADD_CHAT:
-            atmp->add_chat.tmpid = g_strdup(va_arg(rest, gchar*));
+            atmp->add_chat.email = g_strdup(va_arg(rest, gchar*));
             break;
     }
     va_end(rest);
@@ -386,7 +415,7 @@ _mrim_attempt_destroy(MrimAttempt *atmp)
         case ATMP_CONTACT_SEARCH:
             break;
         case ATMP_ADD_CHAT:
-            g_free(atmp->add_chat.tmpid);
+            g_free(atmp->add_chat.email);
             break;
     }
     g_free(atmp);
@@ -1172,22 +1201,29 @@ mrim_join_chat(PurpleConnection *gc, GHashTable *components)
     PurpleChat *chat = NULL;
     PurpleConversation *conv = NULL;
     gchar *email = g_hash_table_lookup(components, "email");
-    if (email) {
-        chat = _purple_find_chat_by_component(md->account, "email", email);
-        conv = serv_got_joined_chat(gc, 0, email);
+    if (email && is_chat_email(email)) {
+        chat = mrim_find_blist_chat(md->account, email);
+        conv = serv_got_joined_chat(gc, _mrim_contact_email2id(md, email), email);
         mrim_pkt_build_chat_get_members(md, 0, email);
         _send_out(md);
     }
     else {
-        gchar* tmpid = g_malloc0(20);
-        sprintf(tmpid, "%d", rand());
-        g_hash_table_replace(components, g_strdup("tmpid"), tmpid);
-        chat = _purple_find_chat_by_component(md->account, "tmpid", tmpid);
+        email = g_malloc0(40);
+        sprintf(email, "%d@temporary", rand());
+        g_hash_table_replace(components, g_strdup("email"), email);
+        chat = mrim_find_blist_chat(md->account, email);
         mrim_pkt_build_add_chat(md, CONTACT_FLAG_MULTICHAT, purple_chat_get_name(chat), FALSE);
         _send_out(md);
-        MrimAttempt *atmp = _mrim_attempt_new(ATMP_ADD_CHAT, tmpid);
+        MrimAttempt *atmp = _mrim_attempt_new(ATMP_ADD_CHAT, email);
         g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
     }
+}
+
+void
+mrim_chat_leave(PurpleConnection *gc, gint id)
+{
+    MrimData *md = (MrimData*) gc->proto_data;
+    fprintf(stderr, "chat leave %d %s\n", id, _mrim_contact_id2email(md, id));
 }
 
 /**************************************************/
@@ -1574,7 +1610,7 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
     }
 
     else if (atmp->type == ATMP_ADD_CHAT) {
-        PurpleChat *chat = _purple_find_chat_by_component(md->account, "tmpid", atmp->add_chat.tmpid);
+        PurpleChat *chat = mrim_find_blist_chat(md->account, atmp->add_chat.email);
         if (pkt->status == CONTACT_OPER_SUCCESS) {
             contact = mrim_contact_new(pkt->contact_id, 0, CONTACT_FLAG_MULTICHAT, STATUS_ONLINE, 0,
                                        pkt->contact_email, purple_chat_get_name(chat));
@@ -1877,7 +1913,7 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
             }
             g_hash_table_replace(md->contacts, contact->email, contact);
             if (is_chat_email(contact->email)) {
-                while (chat = _purple_find_chat_by_component(md->account, "email", contact->email)) {
+                while (chat = mrim_find_blist_chat(md->account, contact->email)) {
                     purple_blist_remove_chat(chat);
                 }
                 GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
@@ -2081,27 +2117,8 @@ mrim_blist_node_menu(PurpleBlistNode *node)
 GList*
 mrim_chat_info(PurpleConnection *gc)
 {
-//TODO: form here
-    struct proto_chat_entry *entry = g_new0(struct proto_chat_entry, 1);
-    entry->label = "Email";
-    entry->identifier = "email";
-    entry->required = FALSE;
-    entry->is_int = FALSE;
-    entry->secret = FALSE;
-    return g_list_append(NULL, entry);
+    return NULL;
 }
-
-/*
-GHashTable*
-mrim_chat_info_defaults(PurpleConnection *gc, const gchar *name)
-{
-    GHashTable *table = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
-    gchar* random = g_malloc0(20);
-    sprintf(random, "%d", rand());
-    g_hash_table_insert(table, "tmpid", random);
-    return table;
-}
-*/
 
 gboolean 
 mrim_offline_message(const PurpleBuddy *buddy)

@@ -86,9 +86,6 @@ mrim_blist_node_menu (PurpleBlistNode *node);
 GList*
 mrim_chat_info(PurpleConnection *gc);
 
-GHashTable*
-mrim_chat_info_defaults(PurpleConnection *gc, const gchar *name);
-
 void
 mrim_login(PurpleAccount *account);
 
@@ -120,7 +117,10 @@ void
 mrim_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group);
 
 void
-mrim_join_chat(PurpleConnection *, GHashTable *components);
+mrim_join_chat(PurpleConnection *gc, GHashTable *components);
+
+void 
+mrim_chat_leave(PurpleConnection *gc, gint id);
 
 void 
 mrim_alias_buddy(PurpleConnection *gc, const char *who, const char *alias);
@@ -136,6 +136,9 @@ mrim_normalize(const PurpleAccount *account, const char *who);
 
 void
 mrim_remove_group(PurpleConnection *gc, PurpleGroup *group);
+
+PurpleChat*
+mrim_find_blist_chat(PurpleAccount *account, const char *name);
 
 gboolean
 mrim_offline_message(const PurpleBuddy *buddy);
