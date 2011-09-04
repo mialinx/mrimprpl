@@ -45,9 +45,9 @@ static PurplePluginProtocolInfo protocol_info = {
     NULL,                   /* void (*rem_deny)(PurpleConnection *, const char *name); */
     NULL,                   /* void (*set_permit_deny)(PurpleConnection *); */
     mrim_join_chat,         /* void (*join_chat)(PurpleConnection *, GHashTable *components); */
-    NULL,                   /* void (*reject_chat)(PurpleConnection *, GHashTable *components); */
+    mrim_chat_reject,       /* void (*reject_chat)(PurpleConnection *, GHashTable *components); */
     NULL,                   /* char *(*get_chat_name)(GHashTable *components); */
-    NULL,                   /* void (*chat_invite)(PurpleConnection *, int id, const char *message, const char *who); */
+    mrim_chat_invite,       /* void (*chat_invite)(PurpleConnection *, int id, const char *message, const char *who); */
     mrim_chat_leave,        /* void (*chat_leave)(PurpleConnection *, int id); */
     NULL,                   /* void (*chat_whisper)(PurpleConnection *, int id, const char *who, const char *message); */
     NULL,                   /* int  (*chat_send)(PurpleConnection *, int id, const char *message, PurpleMessageFlags flags); */

@@ -123,6 +123,15 @@ void
 mrim_chat_leave(PurpleConnection *gc, gint id);
 
 void 
+mrim_chat_reject(PurpleConnection *gc, GHashTable *components);
+
+void 
+mrim_chat_invite(PurpleConnection *gc, gint id, const gchar *message, const gchar *who);
+
+int 
+mrim_chat_send(PurpleConnection *gc, gint id, const gchar *message, PurpleMessageFlags flags);
+
+void 
 mrim_alias_buddy(PurpleConnection *gc, const char *who, const char *alias);
 
 void

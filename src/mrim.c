@@ -146,6 +146,21 @@ _mrim_data_from_buddy(PurpleBuddy *buddy)
     return NULL;
 }
 
+static MrimData*
+_mrim_data_from_chat(PurpleChat *chat)
+{
+    PurpleAccount *account = NULL;
+    PurpleConnection *gc = NULL;
+    MrimData *md = NULL;
+
+    if (account = purple_chat_get_account(chat)) {
+        if (gc = purple_account_get_connection(account)) {
+            return (MrimData*) gc->proto_data;
+        }
+    }
+    return NULL;
+}
+
 static MrimContact*
 _mrim_contact_from_buddy(PurpleBuddy *buddy) 
 {
@@ -154,6 +169,23 @@ _mrim_contact_from_buddy(PurpleBuddy *buddy)
 
     if (md = _mrim_data_from_buddy(buddy)) {
         return (MrimContact*) g_hash_table_lookup(md->contacts, purple_buddy_get_name(buddy));
+    }
+    return NULL;
+}
+
+static MrimContact*
+_mrim_contact_from_chat(PurpleChat *chat) 
+{
+    MrimData *md = NULL;
+    MrimContact *contact = NULL;
+    gchar *email = NULL;
+
+    if (md = _mrim_data_from_chat(chat)) {
+        email = g_hash_table_lookup(purple_chat_get_components(chat), "email");
+        if (!email) {
+            return NULL;
+        }
+        return (MrimContact*) g_hash_table_lookup(md->contacts, email);
     }
     return NULL;
 }
@@ -253,8 +285,15 @@ mrim_find_blist_chat(PurpleAccount *account, const char *email)
         {
             if (PURPLE_BLIST_NODE_IS_CHAT(node)) {
                 chat = (PurpleChat*) node;
-                components = purple_chat_get_components(chat);
-                chat_email = g_hash_table_lookup(components, "email");
+                // f***king pidgin may use chat alias as name, 
+                // so name may be not email, but alias 
+                if (is_chat_email(email)) { 
+                    components = purple_chat_get_components(chat);
+                    chat_email = g_hash_table_lookup(components, "email");
+                }
+                else {
+                    chat_email = (gchar*) purple_chat_get_name(chat);
+                }
                 if (account == purple_chat_get_account(chat) 
                     && chat_email && email && !strcmp(chat_email, email)) 
                 {
@@ -281,7 +320,8 @@ typedef enum {
     ATMP_MESSAGE,
     ATMP_CONTACT_INFO,
     ATMP_CONTACT_SEARCH,
-    ATMP_ADD_CHAT
+    ATMP_ADD_CHAT,
+    ATMP_REMOVE_CHAT
 } MrimAttempType;
 
 typedef struct {
@@ -327,6 +367,10 @@ typedef struct {
         struct {
             gchar *email;
         } add_chat;
+        struct {
+            MrimContact *contact;
+            PurpleChat *chat;
+        } remove_chat;
     };
 } MrimAttempt;
 
@@ -378,6 +422,10 @@ _mrim_attempt_new(MrimAttempType type, ...)
         case ATMP_ADD_CHAT:
             atmp->add_chat.email = g_strdup(va_arg(rest, gchar*));
             break;
+        case ATMP_REMOVE_CHAT:
+            atmp->remove_chat.contact = va_arg(rest, MrimContact*);
+            atmp->remove_chat.chat = va_arg(rest, PurpleChat*);
+            break;
     }
     va_end(rest);
     return atmp;
@@ -416,6 +464,8 @@ _mrim_attempt_destroy(MrimAttempt *atmp)
             break;
         case ATMP_ADD_CHAT:
             g_free(atmp->add_chat.email);
+            break;
+        case ATMP_REMOVE_CHAT:
             break;
     }
     g_free(atmp);
@@ -1226,6 +1276,52 @@ mrim_chat_leave(PurpleConnection *gc, gint id)
     fprintf(stderr, "chat leave %d %s\n", id, _mrim_contact_id2email(md, id));
 }
 
+static void
+_mrim_chat_leave_menu_cb(PurpleBlistNode *node, gpointer ptr)
+{
+    PurpleChat *chat = (PurpleChat*) ptr;
+    MrimData *md = _mrim_data_from_chat(chat);
+    MrimContact *contact = _mrim_contact_from_chat(chat);
+    MrimAttempt *atmp = NULL;
+
+    if (!contact) {
+        purple_debug_error("mrim", "remove buddy: failed to find mrim contact for chat %s\n", 
+                            purple_chat_get_name(chat));
+        return;
+    }
+        
+    mrim_pkt_build_modify_contact(md, contact->id, contact->flags | CONTACT_FLAG_REMOVED, 
+                                    contact->group_id, contact->email, contact->nick);
+    _send_out(md);
+
+    atmp = _mrim_attempt_new(ATMP_REMOVE_CHAT, contact, chat);
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
+
+    purple_debug_info("mrim", "{%u} removing chat %s\n", (guint) md->tx_seq, contact->email);
+}
+
+void 
+mrim_chat_reject(PurpleConnection *gc, GHashTable *components)
+{
+    MrimData *md = (MrimData*) gc->proto_data;
+    gchar *email = g_hash_table_lookup(components, "email");
+    fprintf(stderr, "chat reject %d %s\n", _mrim_contact_email2id(md, email), email);
+}
+
+void 
+mrim_chat_invite(PurpleConnection *gc, gint id, const gchar *message, const gchar *who)
+{
+    MrimData *md = (MrimData*) gc->proto_data;
+    fprintf(stderr, "chat invite %d %s\n", id, _mrim_contact_id2email(md, id));
+}
+
+int 
+mrim_chat_send(PurpleConnection *gc, gint id, const gchar *message, PurpleMessageFlags flags)
+{
+    MrimData *md = (MrimData*) gc->proto_data;
+    fprintf(stderr, "chat send %d %s\n", id, _mrim_contact_id2email(md, id));
+}
+
 /**************************************************/
 /************* DISPATCH ***************************/
 /**************************************************/
@@ -1689,13 +1785,24 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
         }
     }
 
-    else if (atmp->type = ATMP_RENAME_CONTACT) {
+    else if (atmp->type == ATMP_RENAME_CONTACT) {
         if (pkt->status == CONTACT_OPER_SUCCESS) {
             _mrim_contact_set_nick(atmp->rename_contact.contact, atmp->rename_contact.new_nick);
         }
         else {
             purple_notify_error(md->account->gc, "Renaming user",
                                         "Failed to rename user on server", reason);
+        }
+    }
+
+    else if (atmp->type == ATMP_REMOVE_CHAT) {
+        if (pkt->status == CONTACT_OPER_SUCCESS) {
+            g_hash_table_remove(md->contacts, atmp->remove_chat.contact->email);
+            purple_blist_remove_chat(atmp->remove_chat.chat);
+        }
+        else {
+            purple_notify_error(md->account->gc, "Leaving chat",
+                                        "Failed to remove chat on server", reason);
         }
     }
 
@@ -2108,6 +2215,14 @@ mrim_blist_node_menu(PurpleBlistNode *node)
                     G_CALLBACK(_mrim_request_authorization_menu_cb), params, NULL);
                 list = g_list_append(list, action);
             }
+        }
+    }
+    if (PURPLE_BLIST_NODE_IS_CHAT(node)) {
+        if (contact = _mrim_contact_from_chat(PURPLE_CHAT(node))) {
+            md = _mrim_data_from_chat(PURPLE_CHAT(node));
+            action = purple_menu_action_new("Leave conference", 
+                G_CALLBACK(_mrim_chat_leave_menu_cb), PURPLE_CHAT(node), NULL);
+            list = g_list_append(list, action);
         }
     }
 
