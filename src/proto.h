@@ -9,10 +9,8 @@
 
 #define PROTO_VERSION_MAJOR     1
 #define PROTO_VERSION_MINOR     8
-#define PROTO_VERSION_MINOR_HACKY     0x14
-#define PROTO_VERSION ((((u_long)(PROTO_VERSION_MAJOR))<<16)|(u_long)(PROTO_VERSION_MINOR))
-#define PROTO_VERSION_HACKY ((((u_long)(PROTO_VERSION_MAJOR))<<16)|(u_long)(PROTO_VERSION_MINOR_HACKY))
-
+#define PROTO_MAKE_VERSION(major, minor) ((((guint32)(major))<<16)|(guint32)(minor))
+#define PROTO_VERSION PROTO_MAKE_VERSION(PROTO_VERSION_MAJOR, PROTO_VERSION_MINOR)
 
 #define PROTO_MAJOR(p) (((p)&0xFFFF0000)>>16)
 #define PROTO_MINOR(p) ((p)&0x0000FFFF)

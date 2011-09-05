@@ -31,7 +31,8 @@ ghf_dump(gpointer key, gpointer val, gpointer udata)
 static gboolean
 is_chat_email(const char *email)
 {
-    return g_str_has_suffix(email, "@chat.agent");
+    return g_str_has_suffix(email, "@chat.agent") 
+        || g_str_has_suffix(email, "@temporary");
 }
 
 /**************************************************/

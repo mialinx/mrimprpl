@@ -271,7 +271,8 @@ mrim_pkt_build_add_chat(MrimData *md, guint32 flags, const gchar *nick,
         + LPS_LEN(lps_chat_cont));
 
     // I know this is ugly, but this f**king server doesn't want to create chats
-    header.proto = PROTO_VERSION_HACKY;
+    // It starts chat support from 0x14 minor version
+    header.proto = PROTO_MAKE_VERSION(PROTO_VERSION_MAJOR, 0x14);
     
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
     purple_circ_buffer_append(md->server.tx_buf, &flags, sizeof(flags));
@@ -307,7 +308,7 @@ mrim_pkt_build_modify_contact(MrimData *md, guint32 id, guint32 flags, guint32 g
         g_free(lps_email);
         return;
     }
-    if (!(lps_unused = _str2lps_cp1251(" "))) {
+    if (!(lps_unused = _str2lps_cp1251(""))) {
         g_free(lps_nick);
         g_free(lps_email);
         return;
