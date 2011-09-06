@@ -1320,7 +1320,7 @@ int
 mrim_chat_send(PurpleConnection *gc, gint id, const gchar *message, PurpleMessageFlags flags)
 {
     MrimData *md = (MrimData*) gc->proto_data;
-    fprintf(stderr, "chat send %d %s\n", id, _mrim_contact_id2email(md, id));
+    return _mrim_send_message(md, _mrim_contact_id2email(md, id), message, 0);
 }
 
 /**************************************************/
@@ -1331,24 +1331,17 @@ static void
 _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *message)
 {
     PurpleConversation *conv = NULL;
-    PurpleConvIm *conv_im = NULL;
     MrimContact *contact = NULL;
     MrimAuthParams *auth_params = NULL;
-    gchar *clean = NULL;
+    gchar *clean = NULL, *who_part = NULL, *msg_part = NULL, *delim = NULL;
 
     purple_debug_info("mrim", "chat message from %s flags 0x%08x\n == \n%s\n == \n", from, (guint) flags, message);
 
-    /* fallback to normall dispatching.. temp solution */
     if (flags & MESSAGE_FLAG_NOTIFY) {
-        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, from, md->account);
-        if (!conv) {
-            return;
-        }
-        conv_im = PURPLE_CONV_IM(conv);
-        purple_conv_im_set_typing_state(conv_im, PURPLE_TYPING);
-        purple_conv_im_start_typing_timeout(conv_im, MRIM_TYPING_TIMEOUT);
+        // nothing to do. pidgin does not support notifications in chats
     }
     else if (flags & MESSAGE_FLAG_AUTHORIZE) {
+        // TODO: how to authorize chats ?
         if (!g_hash_table_lookup_extended(md->contacts, from, NULL, (gpointer*) &contact)) {
             contact = NULL;
         }
@@ -1357,13 +1350,22 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
                     message, contact ? TRUE : FALSE, _mrim_authorize_cb, NULL, auth_params);
     }
     else {
-        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, from, md->account);
+        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, from, md->account);
         if (!conv) {
-            conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, from);
+            conv = purple_conversation_new(PURPLE_CONV_TYPE_CHAT, md->account, from);
         }
         purple_conversation_set_name(conv, from);
         clean = purple_markup_escape_text(message, -1);
-        purple_conversation_write(conv, from, clean, PURPLE_MESSAGE_RECV, time(NULL));
+        if (delim = g_strstr_len(clean, -1, ":\r\n")) {
+            *delim = '\0';
+            who_part = clean;
+            msg_part = delim + 3;
+        }
+        else {
+            who_part = from;
+            msg_part = clean;
+        }
+        purple_conv_chat_write(PURPLE_CONV_CHAT(conv), who_part, msg_part, PURPLE_MESSAGE_RECV, time(NULL));
         g_free(clean);
     }
 }
@@ -1467,7 +1469,6 @@ static void
 _dispatch_normal_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *message)
 {
     PurpleConversation *conv = NULL;
-    PurpleConvIm *conv_im = NULL;
     MrimContact *contact = NULL;
     MrimAuthParams *auth_params = NULL;
     gchar *clean = NULL;
@@ -1479,9 +1480,8 @@ _dispatch_normal_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *me
         if (!conv) {
             return;
         }
-        conv_im = PURPLE_CONV_IM(conv);
-        purple_conv_im_set_typing_state(conv_im, PURPLE_TYPING);
-        purple_conv_im_start_typing_timeout(conv_im, MRIM_TYPING_TIMEOUT);
+        purple_conv_im_set_typing_state(PURPLE_CONV_IM(conv), PURPLE_TYPING);
+        purple_conv_im_start_typing_timeout(PURPLE_CONV_IM(conv), MRIM_TYPING_TIMEOUT);
     }
     else if (flags & MESSAGE_FLAG_AUTHORIZE) {
         if (!g_hash_table_lookup_extended(md->contacts, from, NULL, (gpointer*) &contact)) {
@@ -1498,7 +1498,7 @@ _dispatch_normal_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *me
         }
         purple_conversation_set_name(conv, from);
         clean = purple_markup_escape_text(message, -1);
-        purple_conversation_write(conv, from, clean, PURPLE_MESSAGE_RECV, time(NULL));
+        purple_conv_im_write(PURPLE_CONV_IM(conv), from, clean, PURPLE_MESSAGE_RECV, time(NULL));
         g_free(clean);
     }
 }
@@ -1551,6 +1551,7 @@ _dispatch_message_status(MrimData *md, MrimPktMessageStatus *pkt)
 {
     MrimAttempt *atmp;
     PurpleConversation *conv;
+    PurpleConversationType conv_type;
     const gchar* reason = _message_delivery_reason(pkt->status);
     const guint32 noecho_flags = (MESSAGE_FLAG_CONTACT|MESSAGE_FLAG_NOTIFY|MESSAGE_FLAG_AUTHORIZE);
 
@@ -1566,11 +1567,19 @@ _dispatch_message_status(MrimData *md, MrimPktMessageStatus *pkt)
 
     if (pkt->status == MESSAGE_DELIVERED) {
         if (!(atmp->message.flags & noecho_flags)) {
-            conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, atmp->message.email, md->account);
+            conv_type = is_chat_email(atmp->message.email) ? PURPLE_CONV_TYPE_CHAT : PURPLE_CONV_TYPE_IM;
+            conv = purple_find_conversation_with_account(conv_type, atmp->message.email, md->account);
             if (!conv) {
-                conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, atmp->message.email);
+                conv =  purple_conversation_new(conv_type, md->account, atmp->message.email);
             }
-            purple_conversation_write(conv, atmp->message.email, atmp->message.message, PURPLE_MESSAGE_SEND, time(NULL));
+            if (is_chat_email(atmp->message.email)) {
+                purple_conv_chat_write(PURPLE_CONV_CHAT(conv), atmp->message.email, 
+                                        atmp->message.message, PURPLE_MESSAGE_SEND, time(NULL));
+            }
+            else {
+                purple_conv_im_write(PURPLE_CONV_IM(conv), atmp->message.email, 
+                                        atmp->message.message, PURPLE_MESSAGE_SEND, time(NULL));
+            }
         }
         g_hash_table_remove(md->attempts, (gpointer) pkt->header.seq);
     }
@@ -1819,8 +1828,8 @@ static void
 _dispatch_offline_message_ack(MrimData *md, MrimPktOfflineMessageAck* pkt)
 {
     if (is_chat_email(pkt->from)) {
-        //TODO: from here
-        //_chat_dispatch(md, pkt);
+        // TODO: does chats supports offline messages ?
+        _dispatch_chat_message_ack(md, pkt->flags, pkt->from, pkt->message);
     }
     else {
         _dispatch_normal_message_ack(md, pkt->flags, pkt->from, pkt->message);
