@@ -159,7 +159,7 @@ mrim_pkt_build_add_contact(MrimData *md, guint32 flags, guint32 group_id,
         g_free(lps_email);
         return;
     }
-    if (!(lps_unused = _str2lps(" "))) {
+    if (!(lps_unused = _str2lps(""))) {
         g_free(lps_name);
         g_free(lps_email);
         return;
