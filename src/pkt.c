@@ -197,7 +197,7 @@ mrim_pkt_build_modify_contact(MrimData *md, guint32 id, guint32 flags, guint32 g
         g_free(lps_email);
         return;
     }
-    if (!(lps_unused = _str2lps(" "))) {
+    if (!(lps_unused = _str2lps(""))) {
         g_free(lps_name);
         g_free(lps_email);
         return;
