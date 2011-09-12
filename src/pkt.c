@@ -25,12 +25,17 @@ _str2lps(const gchar *str, const gchar *charset)
     MrimPktLps *lps = NULL;
     GError *err = NULL;
 
+    if (!str) {
+        purple_debug_error("mrim", "_str2lps: not a string. return empty lps\n");
+        return (MrimPktLps*) g_malloc0(sizeof(guint32));
+    }
+
     g_get_charset(&local_charset);
     data = g_convert_with_fallback(str, strlen(str), charset, local_charset, "?", 
                             NULL, &data_len, &err);
     if (!data) {
-        purple_debug_error("mrim", "_str2lps: bad encoding %s\n", err->message);
-        return NULL;
+        purple_debug_error("mrim", "_str2lps: bad encoding '%s'. return empty lps\n", err->message);
+        return (MrimPktLps*) g_malloc0(sizeof(guint32));
     }
 
     lps = (MrimPktLps*) g_malloc0(sizeof(guint32) + data_len);
@@ -925,14 +930,6 @@ _parse_offline_message_ack(MrimPktHeader *pkt)
 
     /* parse offline message content */
     for (p = k = mail, state = KEY_SKAN; *p && state != STOP; p++) {
-        /* DEBUG
-        fprintf(stderr, "state %s char '%c'\n", state == KEY_SKAN ? "KEY_SKAN" : 
-                                                state == WHITE_SKIP ? "WHITE_SKIP" : 
-                                                state == VAL_SKAN ? "VAL_SKAN" : 
-                                                state == BODY ? "BODY" : "STOP", 
-                                                *p);
-        fprintf(stderr, "\tp=%p\tk=%p\tks=%p\tv=%p\n", p, k, ks, v);
-        */
         switch (state) {
             case KEY_SKAN:
                 /* reading header key */

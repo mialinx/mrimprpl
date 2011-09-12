@@ -1273,8 +1273,7 @@ mrim_join_chat(PurpleConnection *gc, GHashTable *components)
 void
 mrim_chat_leave(PurpleConnection *gc, gint id)
 {
-    MrimData *md = (MrimData*) gc->proto_data;
-    fprintf(stderr, "chat leave %d %s\n", id, _mrim_contact_id2email(md, id));
+    // do nothing
 }
 
 static void
@@ -1352,7 +1351,11 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
     else {
         conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, from, md->account);
         if (!conv) {
-            conv = purple_conversation_new(PURPLE_CONV_TYPE_CHAT, md->account, from);
+            conv = serv_got_joined_chat(purple_account_get_connection(md->account),
+                                        _mrim_contact_email2id(md, from), from);
+            mrim_pkt_build_chat_get_members(md, 0, from);
+            _send_out(md);
+            //conv = purple_conversation_new(PURPLE_CONV_TYPE_CHAT, md->account, from);
         }
         purple_conversation_set_name(conv, from);
         clean = purple_markup_escape_text(message, -1);
