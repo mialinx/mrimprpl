@@ -86,6 +86,9 @@ mrim_blist_node_menu (PurpleBlistNode *node);
 GList*
 mrim_chat_info(PurpleConnection *gc);
 
+GHashTable*
+mrim_chat_info_defaults(PurpleConnection *gc, const gchar *name);
+
 void
 mrim_login(PurpleAccount *account);
 

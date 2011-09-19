@@ -31,8 +31,13 @@ ghf_dump(gpointer key, gpointer val, gpointer udata)
 static gboolean
 is_chat_email(const char *email)
 {
-    return g_str_has_suffix(email, "@chat.agent") 
-        || g_str_has_suffix(email, "@temporary");
+    return email && g_str_has_suffix(email, "@chat.agent");
+}
+
+static gboolean
+is_temp_chat_email(const char *email)
+{
+    return email && g_str_has_suffix(email, "@temporary");
 }
 
 /**************************************************/
@@ -288,7 +293,7 @@ mrim_find_blist_chat(PurpleAccount *account, const char *email)
                 chat = (PurpleChat*) node;
                 // f***king pidgin may use chat alias as name, 
                 // so name may be not email, but alias 
-                if (is_chat_email(email)) { 
+                if (is_chat_email(email) || is_temp_chat_email(email)) { 
                     components = purple_chat_get_components(chat);
                     chat_email = g_hash_table_lookup(components, "email");
                 }
@@ -1252,7 +1257,8 @@ mrim_join_chat(PurpleConnection *gc, GHashTable *components)
     PurpleChat *chat = NULL;
     PurpleConversation *conv = NULL;
     gchar *email = g_hash_table_lookup(components, "email");
-    if (email && is_chat_email(email)) {
+fprintf(stderr, "join '%s'\n", email);
+    if (is_chat_email(email)) {
         chat = mrim_find_blist_chat(md->account, email);
         conv = serv_got_joined_chat(gc, _mrim_contact_email2id(md, email), email);
         mrim_pkt_build_chat_get_members(md, 0, email);
@@ -1261,8 +1267,8 @@ mrim_join_chat(PurpleConnection *gc, GHashTable *components)
     else {
         email = g_malloc0(40);
         sprintf(email, "%d@temporary", rand());
-        g_hash_table_replace(components, g_strdup("email"), email);
         chat = mrim_find_blist_chat(md->account, email);
+fprintf(stderr, "%s %s\n", email, purple_chat_get_name(chat));
         mrim_pkt_build_add_chat(md, CONTACT_FLAG_MULTICHAT, purple_chat_get_name(chat), FALSE);
         _send_out(md);
         MrimAttempt *atmp = _mrim_attempt_new(ATMP_ADD_CHAT, email);
@@ -1329,6 +1335,7 @@ mrim_chat_send(PurpleConnection *gc, gint id, const gchar *message, PurpleMessag
 static void
 _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *message)
 {
+    PurpleConnection *gc = purple_account_get_connection(md->account);
     PurpleConversation *conv = NULL;
     MrimContact *contact = NULL;
     MrimAuthParams *auth_params = NULL;
@@ -1336,41 +1343,35 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
 
     purple_debug_info("mrim", "chat message from %s flags 0x%08x\n == \n%s\n == \n", from, (guint) flags, message);
 
+    clean = purple_markup_escape_text(message, -1);
+    if (delim = g_strstr_len(clean, -1, ":\r\n")) {
+        *delim = '\0';
+        who_part = clean;
+        msg_part = delim + 3;
+    }
+    else {
+        who_part = from;
+        msg_part = clean;
+    }
+
     if (flags & MESSAGE_FLAG_NOTIFY) {
         // nothing to do. pidgin does not support notifications in chats
     }
     else if (flags & MESSAGE_FLAG_AUTHORIZE) {
-        // TODO: how to authorize chats ?
-        if (!g_hash_table_lookup_extended(md->contacts, from, NULL, (gpointer*) &contact)) {
-            contact = NULL;
-        }
-        auth_params = _mrim_auth_params_new(md, from);
-        purple_account_request_authorization(md->account, from, NULL, contact ? contact->nick : NULL, 
-                    message, contact ? TRUE : FALSE, _mrim_authorize_cb, NULL, auth_params);
+        // TODO: from here
+        serv_got_chat_invite(gc, from, who_part, msg_part, g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free));
     }
     else {
         conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, from, md->account);
         if (!conv) {
-            conv = serv_got_joined_chat(purple_account_get_connection(md->account),
-                                        _mrim_contact_email2id(md, from), from);
+            conv = serv_got_joined_chat(gc, _mrim_contact_email2id(md, from), from);
             mrim_pkt_build_chat_get_members(md, 0, from);
             _send_out(md);
-            //conv = purple_conversation_new(PURPLE_CONV_TYPE_CHAT, md->account, from);
         }
         purple_conversation_set_name(conv, from);
-        clean = purple_markup_escape_text(message, -1);
-        if (delim = g_strstr_len(clean, -1, ":\r\n")) {
-            *delim = '\0';
-            who_part = clean;
-            msg_part = delim + 3;
-        }
-        else {
-            who_part = from;
-            msg_part = clean;
-        }
         purple_conv_chat_write(PURPLE_CONV_CHAT(conv), who_part, msg_part, PURPLE_MESSAGE_RECV, time(NULL));
-        g_free(clean);
     }
+    g_free(clean);
 }
 
 static void
@@ -1723,6 +1724,7 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
         if (pkt->status == CONTACT_OPER_SUCCESS) {
             contact = mrim_contact_new(pkt->contact_id, 0, CONTACT_FLAG_MULTICHAT, STATUS_ONLINE, 0,
                                        pkt->contact_email, purple_chat_get_name(chat));
+fprintf(stderr, "success %s -> %s\n", atmp->add_chat.email, pkt->contact_email);
             g_hash_table_replace(md->contacts, contact->email, contact);
             GHashTable *components = purple_chat_get_components(chat);
             g_hash_table_replace(components, g_strdup("email"), g_strdup(pkt->contact_email));
@@ -2245,7 +2247,21 @@ mrim_blist_node_menu(PurpleBlistNode *node)
 GList*
 mrim_chat_info(PurpleConnection *gc)
 {
-    return NULL;
+    struct proto_chat_entry *entry = g_malloc0(sizeof(struct proto_chat_entry));
+    entry->label = "E-mail";
+    entry->identifier = "email";
+    entry->required = 0;
+    entry->is_int = 0;
+    entry->secret = 0;
+    return g_list_append(NULL, entry);
+}
+
+GHashTable*
+mrim_chat_info_defaults(PurpleConnection *gc, const gchar *name)
+{
+    GHashTable *comps = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+    g_hash_table_replace(comps, g_strdup("email"), g_strdup(""));
+    return comps;
 }
 
 gboolean 

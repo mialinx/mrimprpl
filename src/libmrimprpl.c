@@ -24,7 +24,7 @@ static PurplePluginProtocolInfo protocol_info = {
     mrim_blist_node_menu,   /* returns a list of #PurpleMenuAction structs, which represent extra 
                                actions to be shown in (for example) the right-click menu for a node */
     mrim_chat_info,         /* returns list of options, needed to join the chat */
-    NULL,                   /* returns hash table with options defaults */
+    mrim_chat_info_defaults,/* returns hash table with options defaults */
     /* All the server-related functions */
     mrim_login,             /* performs login */
     mrim_close,             /* performs logout */
