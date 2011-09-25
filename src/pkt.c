@@ -20,7 +20,8 @@ static MrimPktLps*
 _str2lps(const gchar *str, const gchar *charset)
 {
     gchar *data = NULL;
-    guint32 data_len = 0;
+    guint32 data_len = 0; 
+    gsize data_gsize = 0; // for 64bit systems
     G_CONST_RETURN char *local_charset = NULL;
     MrimPktLps *lps = NULL;
     GError *err = NULL;
@@ -32,11 +33,12 @@ _str2lps(const gchar *str, const gchar *charset)
 
     g_get_charset(&local_charset);
     data = g_convert_with_fallback(str, strlen(str), charset, local_charset, "?", 
-                            NULL, &data_len, &err);
+                            NULL, &data_gsize, &err);
     if (!data) {
         purple_debug_error("mrim", "_str2lps: bad encoding '%s'. return empty lps\n", err->message);
         return (MrimPktLps*) g_malloc0(sizeof(guint32));
     }
+    data_len = (guint32) data_gsize;
 
     lps = (MrimPktLps*) g_malloc0(sizeof(guint32) + data_len);
     lps->length = GUINT32_TO_LE(data_len);
@@ -92,14 +94,14 @@ static gchar*
 _lps2str(MrimPktLps *lps, const gchar* charset)
 {
     gchar *str = NULL;
-    guint32 str_len = 0;
+    gsize str_gsize = 0; // for 64bit systems
     G_CONST_RETURN char *local_charset = NULL;
     GError *err = NULL;
 
     g_get_charset(&local_charset);
 
     str = g_convert_with_fallback(lps->data, GUINT32_FROM_LE(lps->length), 
-            local_charset, charset, "?", NULL, &str_len, &err);
+            local_charset, charset, "?", NULL, &str_gsize, &err);
 
     if (!str) {
         purple_debug_error("mrim", "_lps2str: bad encoding %s\n", err->message);
