@@ -9,7 +9,7 @@
 
 #define PROTO_VERSION_MAJOR     1
 #define PROTO_VERSION_MINOR     8
-#define PROTO_VERSION ((((u_long)(PROTO_VERSION_MAJOR))<<16)|(u_long)(PROTO_VERSION_MINOR))
+#define PROTO_VERSION ((((u_int32_t)(PROTO_VERSION_MAJOR))<<16)|(u_int32_t)(PROTO_VERSION_MINOR))
 
 
 #define PROTO_MAJOR(p) (((p)&0xFFFF0000)>>16)
@@ -18,13 +18,13 @@
 
 typedef struct mrim_packet_header_t
 {
-    u_long magic;      // Magic
-    u_long proto;      // Версия протокола
-    u_long seq;        // Sequence
-    u_long msg;        // Тип пакета
-    u_long dlen;       // Длина данных
-    u_long from;       // Адрес отправителя
-    u_long fromport;   // Порт отправителя
+    u_int32_t magic;      // Magic
+    u_int32_t proto;      // Версия протокола
+    u_int32_t seq;        // Sequence
+    u_int32_t msg;        // Тип пакета
+    u_int32_t dlen;       // Длина данных
+    u_int32_t from;       // Адрес отправителя
+    u_int32_t fromport;   // Порт отправителя
     u_char reserved[16];   // Зарезервировано
 }
 mrim_packet_header_t;
@@ -130,7 +130,7 @@ mrim_packet_header_t;
     
 #define MRIM_CS_ADD_CONTACT_ACK         0x101A  // S -> C
     // UL status
-    // UL contact_id or (u_long)-1 if status is not OK
+    // UL contact_id or (u_int32_t)-1 if status is not OK
     
     #define CONTACT_OPER_SUCCESS        0x0000
     #define CONTACT_OPER_ERROR      0x0001

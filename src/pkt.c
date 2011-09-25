@@ -19,18 +19,20 @@ static MrimPktLps*
 _str2lps(const gchar *str)
 {
     gchar *data = NULL;
-    guint32 data_len = 0;
+    guint32 data_len = 0; 
+    gsize data_gsize = 0; // for 64bit systems
     G_CONST_RETURN char *local_charset = NULL;
     MrimPktLps *lps = NULL;
     GError *err = NULL;
 
     g_get_charset(&local_charset);
     data = g_convert_with_fallback(str, strlen(str), "WINDOWS-1251", local_charset, "?", 
-                            NULL, &data_len, &err);
+                            NULL, &data_gsize, &err);
     if (!data) {
         purple_debug_error("mrim", "_str2lps: bad encoding %s\n", err->message);
         return NULL;
     }
+    data_len = (guint32) data_gsize;
 
     lps = (MrimPktLps*) g_malloc0(sizeof(guint32) + data_len);
     lps->length = GUINT32_TO_LE(data_len);
@@ -43,19 +45,14 @@ static gchar*
 _lps2str(MrimPktLps *lps)
 {
     gchar *str = NULL;
-    guint32 str_len = 0;
+    gsize str_gsize = 0; // for 64bit systems
     G_CONST_RETURN char *local_charset = NULL;
     GError *err = NULL;
 
     g_get_charset(&local_charset);
 
-/*
-purple_debug_info("mrim", "Current locale: %s\n", local_charset);
-gchar *cpy = g_strndup(lps->data, lps->length);
-purple_debug_info("mrim", "Raw: %s\n", cpy);
-*/
     str = g_convert_with_fallback(lps->data, lps->length, local_charset, "WINDOWS-1251", "?",
-                            NULL, &str_len, &err);
+                            NULL, &str_gsize, &err);
     if (!str) {
         purple_debug_error("mrim", "_lps2str: bad encoding %s\n", err->message);
         return NULL;
