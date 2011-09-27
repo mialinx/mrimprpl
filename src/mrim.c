@@ -1257,7 +1257,6 @@ mrim_join_chat(PurpleConnection *gc, GHashTable *components)
     PurpleChat *chat = NULL;
     PurpleConversation *conv = NULL;
     gchar *email = g_hash_table_lookup(components, "email");
-fprintf(stderr, "join '%s'\n", email);
     if (is_chat_email(email)) {
         chat = mrim_find_blist_chat(md->account, email);
         conv = serv_got_joined_chat(gc, _mrim_contact_email2id(md, email), email);
@@ -1267,8 +1266,8 @@ fprintf(stderr, "join '%s'\n", email);
     else {
         email = g_malloc0(40);
         sprintf(email, "%d@temporary", rand());
+        g_hash_table_replace(components, g_strdup("email"), email);
         chat = mrim_find_blist_chat(md->account, email);
-fprintf(stderr, "%s %s\n", email, purple_chat_get_name(chat));
         mrim_pkt_build_add_chat(md, CONTACT_FLAG_MULTICHAT, purple_chat_get_name(chat), FALSE);
         _send_out(md);
         MrimAttempt *atmp = _mrim_attempt_new(ATMP_ADD_CHAT, email);
@@ -1724,7 +1723,6 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
         if (pkt->status == CONTACT_OPER_SUCCESS) {
             contact = mrim_contact_new(pkt->contact_id, 0, CONTACT_FLAG_MULTICHAT, STATUS_ONLINE, 0,
                                        pkt->contact_email, purple_chat_get_name(chat));
-fprintf(stderr, "success %s -> %s\n", atmp->add_chat.email, pkt->contact_email);
             g_hash_table_replace(md->contacts, contact->email, contact);
             GHashTable *components = purple_chat_get_components(chat);
             g_hash_table_replace(components, g_strdup("email"), g_strdup(pkt->contact_email));
