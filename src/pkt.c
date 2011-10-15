@@ -384,11 +384,14 @@ mrim_pkt_build_chat_get_members(MrimData *md, guint32 flags, const gchar* email)
     }
     
     if (!(lps_message = lps_rtf_message = _str2lps_cp1251(""))) {
+        g_free(lps_to);
         return;
     }
 
     guint32 subtype = GUINT32_TO_LE(MULTICHAT_GET_MEMBERS);
     if (!(lps_chat = _vmem2lps(1, &subtype, sizeof(subtype)))) {
+        g_free(lps_to);
+        g_free(lps_message);
         return;
     }
 
@@ -405,6 +408,84 @@ mrim_pkt_build_chat_get_members(MrimData *md, guint32 flags, const gchar* email)
     g_free(lps_to);
     g_free(lps_message);
     g_free(lps_chat);
+}
+
+void
+mrim_pkt_build_chat_invite(MrimData *md, guint32 flags, const gchar* email, 
+                    const gchar *who, const gchar *message)
+{
+    MrimPktHeader header;
+    MrimPktLps *lps_to = NULL, *lps_message = NULL, *lps_rtf_message = NULL,
+               *lps_from = NULL, *lps_who = NULL, *lps_who_list = NULL, *lps_chat = NULL;
+
+    flags = GUINT32_TO_LE(flags);
+    if (!(lps_to = _str2lps_cp1251(email))) {
+        return;
+    }
+    
+    if (!(lps_message = _str2lps_cp1251(message))) {
+        g_free(lps_to);
+        return;
+    }
+
+    if (!(lps_rtf_message = _str2lps_cp1251(""))) {
+        g_free(lps_to);
+        g_free(lps_message);
+        return;
+    }
+
+    if (!(lps_from = _str2lps_cp1251( purple_account_get_username(md->account) ))) {
+        g_free(lps_to);
+        g_free(lps_message);
+        g_free(lps_rtf_message);
+        return;
+    }
+
+    if (!(lps_who = _str2lps_cp1251(who))) {
+        g_free(lps_to);
+        g_free(lps_message);
+        g_free(lps_rtf_message);
+        g_free(lps_from);
+        return;
+    }
+
+    guint32 count = GUINT32_TO_LE(1);
+    if (!(lps_who_list = _vmem2lps(2, &count, sizeof(count), lps_who, LPS_LEN(lps_who)))) {
+        g_free(lps_to);
+        g_free(lps_message);
+        g_free(lps_rtf_message);
+        g_free(lps_from);
+        g_free(lps_who);
+        return;
+    }
+
+    guint32 subtype = GUINT32_TO_LE(MULTICHAT_ADD_MEMBERS);
+    if (!(lps_chat = _vmem2lps(2, &subtype, sizeof(subtype), lps_who_list, LPS_LEN(lps_who_list)))) {
+        g_free(lps_to);
+        g_free(lps_message);
+        g_free(lps_rtf_message);
+        g_free(lps_from);
+        g_free(lps_who);
+        g_free(lps_who_list);
+        return;
+    }
+
+    _init_header(&header, ++md->tx_seq, MRIM_CS_MESSAGE, sizeof(flags) + LPS_LEN(lps_to)
+        + LPS_LEN(lps_message) + LPS_LEN(lps_rtf_message) + LPS_LEN(lps_chat));
+
+    purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
+    purple_circ_buffer_append(md->server.tx_buf, &flags, sizeof(flags));
+    purple_circ_buffer_append(md->server.tx_buf, lps_to, LPS_LEN(lps_to));
+    purple_circ_buffer_append(md->server.tx_buf, lps_message, LPS_LEN(lps_message));
+    purple_circ_buffer_append(md->server.tx_buf, lps_rtf_message, LPS_LEN(lps_rtf_message));
+    purple_circ_buffer_append(md->server.tx_buf, lps_chat, LPS_LEN(lps_chat));
+
+    g_free(lps_to);
+    g_free(lps_message);
+    g_free(lps_rtf_message);
+    g_free(lps_from);
+    g_free(lps_who);
+    g_free(lps_who_list);
 }
 
 void

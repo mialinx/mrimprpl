@@ -331,7 +331,8 @@ typedef enum {
     ATMP_CONTACT_SEARCH,
     ATMP_CREATE_CHAT,
     ATMP_ADD_CHAT,
-    ATMP_REMOVE_CHAT
+    ATMP_REMOVE_CHAT,
+    ATMP_INVITE_USER
 } MrimAttempType;
 
 typedef struct {
@@ -384,6 +385,10 @@ typedef struct {
             MrimContact *contact;
             PurpleChat *chat;
         } remove_chat;
+        struct {
+            gchar *email;
+            gchar *who;
+        } invite_user;
     };
 } MrimAttempt;
 
@@ -442,6 +447,10 @@ _mrim_attempt_new(MrimAttempType type, ...)
             atmp->remove_chat.contact = va_arg(rest, MrimContact*);
             atmp->remove_chat.chat = va_arg(rest, PurpleChat*);
             break;
+        case ATMP_INVITE_USER:
+            atmp->invite_user.email = g_strdup(va_arg(rest, gchar*));
+            atmp->invite_user.who = g_strdup(va_arg(rest, gchar*));
+            break;
     }
     va_end(rest);
     return atmp;
@@ -485,6 +494,10 @@ _mrim_attempt_destroy(MrimAttempt *atmp)
             g_free(atmp->add_chat.email);
             break;
         case ATMP_REMOVE_CHAT:
+            break;
+        case ATMP_INVITE_USER:
+            g_free(atmp->invite_user.email);
+            g_free(atmp->invite_user.who);
             break;
     }
     g_free(atmp);
@@ -1346,7 +1359,15 @@ void
 mrim_chat_invite(PurpleConnection *gc, gint id, const gchar *message, const gchar *who)
 {
     MrimData *md = (MrimData*) gc->proto_data;
-    fprintf(stderr, "chat invite %d %s\n", id, _mrim_contact_id2email(md, id));
+    MrimAttempt *atmp = NULL;
+    gchar *email = _mrim_contact_id2email(md, id);
+    if (!email) {
+        purple_debug_warning("mrim", "chat_invite: failed to find chat for id %d", id);
+        return;
+    }
+    mrim_pkt_build_chat_invite(md, 0, email, who, message);
+    atmp = _mrim_attempt_new(ATMP_INVITE_USER, email, who);
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
 }
 
 int 
@@ -1599,33 +1620,44 @@ _dispatch_message_status(MrimData *md, MrimPktMessageStatus *pkt)
                                         pkt->header.seq);
         return;
     }
-    if (atmp->type != ATMP_MESSAGE) {
-        purple_debug_error("mrim", "_dispatch_message_status: incorrect attempt type\n");
-        return;
-    }
 
     if (pkt->status == MESSAGE_DELIVERED) {
-        if (!(atmp->message.flags & noecho_flags)) {
-            conv_type = is_chat_email(atmp->message.email) ? PURPLE_CONV_TYPE_CHAT : PURPLE_CONV_TYPE_IM;
-            conv = purple_find_conversation_with_account(conv_type, atmp->message.email, md->account);
+        if (atmp->type == ATMP_INVITE_USER) {
+            purple_debug_info("mrim", "_dispatch_message_status: invite user %s to chat %s\n",
+                                        atmp->invite_user.who, atmp->invite_user.email);
+            conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, atmp->invite_user.email, md->account);
             if (!conv) {
-                conv =  purple_conversation_new(conv_type, md->account, atmp->message.email);
+                conv =  purple_conversation_new(PURPLE_CONV_TYPE_CHAT, md->account, atmp->invite_user.email);
             }
-            if (is_chat_email(atmp->message.email)) {
-                purple_conv_chat_write(PURPLE_CONV_CHAT(conv), atmp->message.email, 
-                                        atmp->message.message, PURPLE_MESSAGE_SEND, time(NULL));
-            }
-            else {
-                purple_conv_im_write(PURPLE_CONV_IM(conv), atmp->message.email, 
-                                        atmp->message.message, PURPLE_MESSAGE_SEND, time(NULL));
+            purple_conv_chat_add_user(PURPLE_CONV_CHAT(conv), atmp->invite_user.who, NULL, 0, FALSE);
+        }
+        else if (atmp->type == ATMP_MESSAGE) {
+            if (!(atmp->message.flags & noecho_flags)) {
+                conv_type = is_chat_email(atmp->message.email) ? PURPLE_CONV_TYPE_CHAT : PURPLE_CONV_TYPE_IM;
+                conv = purple_find_conversation_with_account(conv_type, atmp->message.email, md->account);
+                if (!conv) {
+                    conv =  purple_conversation_new(conv_type, md->account, atmp->message.email);
+                }
+                if (is_chat_email(atmp->message.email)) {
+                    purple_conv_chat_write(PURPLE_CONV_CHAT(conv), atmp->message.email, 
+                                            atmp->message.message, PURPLE_MESSAGE_SEND, time(NULL));
+                }
+                else {
+                    purple_conv_im_write(PURPLE_CONV_IM(conv), atmp->message.email, 
+                                            atmp->message.message, PURPLE_MESSAGE_SEND, time(NULL));
+                }
             }
         }
-        g_hash_table_remove(md->attempts, (gpointer) pkt->header.seq);
+        else {
+            purple_debug_error("mrim", "_dispatch_message_status: incorrect attempt type\n");
+        }
     }
     else {
         purple_notify_error(md->account->gc, "Sending message", 
                                     "Failed to send message", reason);
     }
+
+    g_hash_table_remove(md->attempts, (gpointer) pkt->header.seq);
 }
 
 static void

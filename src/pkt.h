@@ -50,6 +50,10 @@ void
 mrim_pkt_build_chat_get_members(MrimData *md, guint32 flags, const gchar* email);
 
 void
+mrim_pkt_build_chat_invite(MrimData *md, guint32 flags, const gchar* email, 
+                    const gchar *who, const gchar *message);
+
+void
 mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id);
 
 void
