@@ -140,6 +140,7 @@ typedef struct {
     MrimPktChatHeader header;
     gchar *nick;
     GList *members;
+    gchar *owner;
 } MrimPktChatMembers;
 
 typedef struct {

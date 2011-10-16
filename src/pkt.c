@@ -666,7 +666,7 @@ _read_chat_header(MrimPktChatHeader *pkt, MrimPktChatHeader *loc, guint32 *pos)
 static guint32
 _read_ul(gpointer ptr, guint32 *pos)
 {
-    guint32 val = *( (guint32*) (ptr + *pos) );
+    guint32 val = GUINT32_FROM_LE( *( (guint32*) (ptr + *pos) ) );
     *pos += sizeof(guint32);
     return val;
 }
@@ -770,14 +770,18 @@ static MrimPktChatMembers*
 _chat_parse_members(MrimPktChatHeader *pkt)
 {
     guint32 pos = 0;
+    guint32 members_count = 0;
     MrimPktChatMembers *loc = g_new0(MrimPktChatMembers, 1);
     _read_chat_header(pkt, &loc->header, &pos);
     loc->nick = _read_lps_utf16(pkt, &pos); 
     _skip_ul(pkt, &pos); // unknown number
-    _skip_ul(pkt, &pos); // seems to be a number of users
-    while (pos < loc->header.dlen) {
+    members_count = _read_ul(pkt, &pos);
+    while (members_count-- > 0 && pos < loc->header.dlen) {
         gchar *member = _read_lps_cp1251(pkt, &pos);
         loc->members = g_list_append(loc->members, member);
+    }
+    if (pos < loc->header.dlen) {
+        loc->owner = _read_lps_cp1251(pkt, &pos);
     }
     loc->members = g_list_first(loc->members);
     return loc;

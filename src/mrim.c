@@ -1289,12 +1289,18 @@ mrim_join_chat(PurpleConnection *gc, GHashTable *components)
         contact = g_hash_table_lookup(md->contacts, email);
         if (contact) {
             //contact is already in contact list
+            purple_debug_info("mrim", "mrim_join_chat: chat %s exists, loading memebers\n", email);
             chat = mrim_find_blist_chat(md->account, email);
-            conv = serv_got_joined_chat(gc, contact->id, purple_chat_get_name(chat));
+            conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, 
+                                        purple_chat_get_name(chat), md->account);
+            if (!conv) {
+                conv = serv_got_joined_chat(gc, contact->id, purple_chat_get_name(chat));
+            }
             mrim_pkt_build_chat_get_members(md, 0, email);
             _send_out(md);
         }
         else {
+            purple_debug_info("mrim", "mrim_join_chat: accepting invitation to chat %s\n", email);
             // contact is not added yet, but email is known, incoming chat
             // TODO: how to get chat name, shall we create chat blist object ?
             mrim_pkt_build_add_contact(md, CONTACT_FLAG_MULTICHAT, 0, email, email);
@@ -1304,10 +1310,10 @@ mrim_join_chat(PurpleConnection *gc, GHashTable *components)
         }
     }
     else {
-fprintf(stderr, "v3\n");
         // chat is not even exist. create new chat
         email = g_malloc0(40);
         sprintf(email, "%d@temporary", rand());
+        purple_debug_info("mrim", "mrim_join_chat: creating new chat. temp email is %s\n", email);
         g_hash_table_replace(components, g_strdup("email"), email);
         chat = mrim_find_blist_chat(md->account, email);
         mrim_pkt_build_add_chat(md, CONTACT_FLAG_MULTICHAT, purple_chat_get_name(chat), FALSE);
@@ -1321,6 +1327,7 @@ void
 mrim_chat_leave(PurpleConnection *gc, gint id)
 {
     // do nothing
+    purple_debug_info("mrim", "mrim_chat_leave: called with id %d\n", id);
 }
 
 static void
@@ -1360,11 +1367,16 @@ mrim_chat_invite(PurpleConnection *gc, gint id, const gchar *message, const gcha
 {
     MrimData *md = (MrimData*) gc->proto_data;
     MrimAttempt *atmp = NULL;
-    gchar *email = _mrim_contact_id2email(md, id);
-    if (!email) {
-        purple_debug_warning("mrim", "chat_invite: failed to find chat for id %d", id);
+    if (!g_hash_table_lookup(md->contacts, who)) {
+        purple_debug_error("mrim", "mrim_chat_invite: can't find recepient %s in contact list\n", who);
         return;
     }
+    gchar *email = _mrim_contact_id2email(md, id);
+    if (!email) {
+        purple_debug_error("mrim", "mrim_chat_invite: failed to find chat for id %d\n", id);
+        return;
+    }
+    purple_debug_info("mrim", "mrim_chat_invite: sending invitation to %s into the chat %s\n", who, email);
     mrim_pkt_build_chat_invite(md, 0, email, who, message);
     atmp = _mrim_attempt_new(ATMP_INVITE_USER, email, who);
     g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
@@ -1387,6 +1399,7 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
     PurpleConnection *gc = purple_account_get_connection(md->account);
     PurpleConversation *conv = NULL;
     MrimAuthParams *auth_params = NULL;
+    PurpleChat *chat = NULL;
     gchar *clean = NULL, *who_part = NULL, *msg_part = NULL, *delim = NULL;
 
     purple_debug_info("mrim", "chat message from %s flags 0x%08x\n == \n%s\n == \n", from, (guint) flags, message);
@@ -1409,7 +1422,7 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
         if (!g_hash_table_lookup(md->contacts, from)) {
             GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
             g_hash_table_replace(components, g_strdup("email"), g_strdup(from));
-            PurpleChat *chat = purple_chat_new(md->account, from, components);
+            chat = purple_chat_new(md->account, from, components);
             purple_blist_add_chat(chat, NULL, NULL);
 
             // serv_got_chat_invite will finally destroy components hash, so we should pass cloned one.
@@ -1417,13 +1430,15 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
             g_hash_table_replace(components2, g_strdup("email"), g_strdup(from));
             serv_got_chat_invite(gc, from, who_part, msg_part, components2);
         }
-        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, from, md->account);
+        chat = mrim_find_blist_chat(md->account, from);
+        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, 
+                                        purple_chat_get_name(chat), md->account);
         if (!conv) {
-            conv = serv_got_joined_chat(gc, _mrim_contact_email2id(md, from), from);
+            conv = serv_got_joined_chat(gc, _mrim_contact_email2id(md, from), purple_chat_get_name(chat));
             mrim_pkt_build_chat_get_members(md, 0, from);
             _send_out(md);
         }
-        purple_conversation_set_name(conv, from);
+        //purple_conversation_set_name(conv, from);
         purple_conv_chat_write(PURPLE_CONV_CHAT(conv), who_part, msg_part, PURPLE_MESSAGE_RECV, time(NULL));
     }
 
@@ -1434,19 +1449,40 @@ static void
 _chat_dispatch_members(MrimData *md, MrimPktMessageAck *pkt, MrimPktChatMembers *chat_pkt)
 {
     GList *item = NULL;
+    PurpleChat *chat = NULL;
     PurpleConversation *conv = NULL;
+    PurpleConvChat *conv_chat = NULL;
+    gchar *email = NULL;
 
-    if (!(conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, 
-                                        pkt->from, md->account)))
-    {
-        purple_debug_warning("mrim", "_chat_dispatch_members: no chat conversation for email %s\n",
-                                        pkt->from);
+    if (!(chat = mrim_find_blist_chat(md->account, pkt->from))) {
+        purple_debug_error("mrim", "_chat_dispatch_members: no blist chat for email %s\n", pkt->from);
         return;
     }
 
-    for (item = chat_pkt->members; item; item = g_list_next(item)) {
-        purple_conv_chat_add_user(PURPLE_CONV_CHAT(conv), item->data, NULL, 0, FALSE);
+    if (!(conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, 
+                                        purple_chat_get_name(chat), md->account)))
+    {
+        purple_debug_warning("mrim", "_chat_dispatch_members: no conversation for email %s\n", pkt->from);
+        return;
     }
+    conv_chat = PURPLE_CONV_CHAT(conv);
+
+    // add new members to the chat
+    for (item = chat_pkt->members; item; item = g_list_next(item)) {
+        email = item->data;
+        if (!purple_conv_chat_find_user(conv_chat, email)) {
+            purple_conv_chat_add_user(conv_chat, email, NULL, 0, FALSE);
+        }
+    }
+
+    // remove old members from the chat
+    for (item = purple_conv_chat_get_users(conv_chat); item; item = g_list_next(item)) {
+        email = purple_conv_chat_cb_get_name((PurpleConvChatBuddy*) item->data);
+        if (!g_list_find_custom(chat_pkt->members, email, g_strcmp0)) {
+            purple_conv_chat_remove_user(conv_chat, email, NULL);
+        }
+    }
+
 }
 
 static void
@@ -1609,9 +1645,9 @@ _message_delivery_reason(guint32 status)
 static void
 _dispatch_message_status(MrimData *md, MrimPktMessageStatus *pkt)
 {
-    MrimAttempt *atmp;
-    PurpleConversation *conv;
-    PurpleConversationType conv_type;
+    MrimAttempt *atmp = NULL;
+    PurpleConversation *conv = NULL;
+    PurpleChat *chat = NULL;
     const gchar* reason = _message_delivery_reason(pkt->status);
     const guint32 noecho_flags = (MESSAGE_FLAG_CONTACT|MESSAGE_FLAG_NOTIFY|MESSAGE_FLAG_AUTHORIZE);
 
@@ -1625,24 +1661,44 @@ _dispatch_message_status(MrimData *md, MrimPktMessageStatus *pkt)
         if (atmp->type == ATMP_INVITE_USER) {
             purple_debug_info("mrim", "_dispatch_message_status: invite user %s to chat %s\n",
                                         atmp->invite_user.who, atmp->invite_user.email);
-            conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, atmp->invite_user.email, md->account);
-            if (!conv) {
-                conv =  purple_conversation_new(PURPLE_CONV_TYPE_CHAT, md->account, atmp->invite_user.email);
+            if (chat = mrim_find_blist_chat(md->account, atmp->invite_user.email)) {
+                conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, 
+                                        purple_chat_get_name(chat), md->account);
+                if (!conv) {
+                    conv =  purple_conversation_new(PURPLE_CONV_TYPE_CHAT, md->account, 
+                                        purple_chat_get_name(chat));
+                }
+                purple_conv_chat_add_user(PURPLE_CONV_CHAT(conv), atmp->invite_user.who, NULL, 0, FALSE);
             }
-            purple_conv_chat_add_user(PURPLE_CONV_CHAT(conv), atmp->invite_user.who, NULL, 0, FALSE);
+            else {
+                purple_debug_error("mrim", "_dispatch_message_status: chat not found %s\n", 
+                                atmp->invite_user.email);
+            }
         }
         else if (atmp->type == ATMP_MESSAGE) {
             if (!(atmp->message.flags & noecho_flags)) {
-                conv_type = is_chat_email(atmp->message.email) ? PURPLE_CONV_TYPE_CHAT : PURPLE_CONV_TYPE_IM;
-                conv = purple_find_conversation_with_account(conv_type, atmp->message.email, md->account);
-                if (!conv) {
-                    conv =  purple_conversation_new(conv_type, md->account, atmp->message.email);
-                }
                 if (is_chat_email(atmp->message.email)) {
-                    purple_conv_chat_write(PURPLE_CONV_CHAT(conv), atmp->message.email, 
-                                            atmp->message.message, PURPLE_MESSAGE_SEND, time(NULL));
+                    if (chat = mrim_find_blist_chat(md->account, atmp->message.email)) {
+                        conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, 
+                                        purple_chat_get_name(chat), md->account);
+                        if (!conv) {
+                            conv =  purple_conversation_new(PURPLE_CONV_TYPE_CHAT, md->account, 
+                                        purple_chat_get_name(chat));
+                        }
+                        purple_conv_chat_write(PURPLE_CONV_CHAT(conv), atmp->message.email, 
+                                                atmp->message.message, PURPLE_MESSAGE_SEND, time(NULL));
+                    }
+                    else {
+                        purple_debug_error("mrim", "_dispatch_message_status: chat not found %s\n", 
+                                        atmp->message.email);
+                    }
                 }
                 else {
+                    conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, 
+                                            atmp->message.email, md->account);
+                    if (!conv) {
+                        conv =  purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, atmp->message.email);
+                    }
                     purple_conv_im_write(PURPLE_CONV_IM(conv), atmp->message.email, 
                                             atmp->message.message, PURPLE_MESSAGE_SEND, time(NULL));
                 }
@@ -1811,6 +1867,7 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
             g_hash_table_replace(md->contacts, contact->email, contact);
             GHashTable *components = purple_chat_get_components(chat);
             g_hash_table_replace(components, g_strdup("email"), g_strdup(pkt->contact_email));
+            purple_blist_schedule_save();
             mrim_join_chat(md->account->gc, components);
         }
         else {
@@ -1936,9 +1993,12 @@ _dispatch_authorize_ack(MrimData *md, MrimPktAuthorizeAck *pkt)
 
     if (g_hash_table_lookup_extended(md->contacts, pkt->email, NULL, (gpointer*) &contact)) {
         contact->server_flags &= !CONTACT_INTFLAG_NOT_AUTHORIZED;
-        msg = g_strdup_printf("You were authorized by %s", contact->email);
-        purple_notify_info(md->account->gc, "Authorization", msg, NULL);
-        g_free(msg);
+        purple_debug_info("mrim", "_dispatch_authorize_ack: you were authorized by %s\n", contact->email);
+        if (!is_chat_email(contact->email)) {
+            msg = g_strdup_printf("You were authorized by %s", contact->email);
+            purple_notify_info(md->account->gc, "Authorization", msg, NULL);
+            g_free(msg);
+        }
     }
     else {
         purple_debug_warning("mrim", "_dispatch_authorize_ack", "User %s was not found\n", pkt->email);
@@ -1958,7 +2018,7 @@ _dispatch_user_status(MrimData *md, MrimPktUserStatus *pkt)
                             _status_mrim2purple(pkt->status), NULL);
     }
     else {
-        purple_debug_warning("mrim", "failed to find contact for email %s\n", pkt->email);
+        purple_debug_warning("mrim", "_dispatch_user_status: failed to find contact for email %s\n", pkt->email);
     }
 }
 
