@@ -126,9 +126,6 @@ void
 mrim_chat_leave(PurpleConnection *gc, gint id);
 
 void 
-mrim_chat_reject(PurpleConnection *gc, GHashTable *components);
-
-void 
 mrim_chat_invite(PurpleConnection *gc, gint id, const gchar *message, const gchar *who);
 
 int 
