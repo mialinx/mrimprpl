@@ -1789,6 +1789,7 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
         if (pkt->status == CONTACT_OPER_SUCCESS) {
             contact->id = pkt->contact_id;
             g_hash_table_replace(md->contacts, contact->email, contact);
+            _mrim_fetch_avatar(md, contact->email);
         }
         else if (pkt->status == CONTACT_OPER_USER_EXISTS) {
             purple_debug_info("mrim", "user already %s existed\n", contact->email);
