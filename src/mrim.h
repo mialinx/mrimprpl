@@ -120,7 +120,7 @@ void
 mrim_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy, PurpleGroup *group);
 
 void
-mrim_join_chat(PurpleConnection *gc, GHashTable *components);
+mrim_chat_join(PurpleConnection *gc, GHashTable *components);
 
 void 
 mrim_chat_leave(PurpleConnection *gc, gint id);
