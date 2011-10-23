@@ -443,7 +443,6 @@ _mrim_attempt_new(MrimAttempType type, ...)
             break;
         case ATMP_REMOVE_CHAT:
             atmp->remove_chat.contact = va_arg(rest, MrimContact*);
-            atmp->remove_chat.chat = va_arg(rest, PurpleChat*);
             break;
         case ATMP_INVITE_USER:
             atmp->invite_user.email = g_strdup(va_arg(rest, gchar*));
@@ -1333,24 +1332,31 @@ mrim_chat_leave(PurpleConnection *gc, gint id)
 }
 
 static void
-_mrim_chat_leave_menu_cb(PurpleBlistNode *node, gpointer ptr)
+_mrim_chat_removed_cb(PurpleBlistNode *node, gpointer ptr)
 {
-    PurpleChat *chat = (PurpleChat*) ptr;
-    MrimData *md = _mrim_data_from_chat(chat);
-    MrimContact *contact = _mrim_contact_from_chat(chat);
+    MrimData* md = (MrimData*) ptr;
+    PurpleBlistNodeType type = purple_blist_node_get_type(node);
+    PurpleChat *chat;
     MrimAttempt *atmp = NULL;
+    MrimContact *contact = NULL;
+    
+    if (type != PURPLE_BLIST_CHAT_NODE) {
+        return;
+    }
 
+    chat = PURPLE_CHAT(node);
+    contact = _mrim_contact_from_chat(chat);
     if (!contact) {
         purple_debug_error("mrim", "remove buddy: failed to find mrim contact for chat %s\n", 
                             purple_chat_get_name(chat));
         return;
     }
-        
+
     mrim_pkt_build_modify_contact(md, contact->id, contact->flags | CONTACT_FLAG_REMOVED, 
                                     contact->group_id, contact->email, contact->nick);
     _send_out(md);
 
-    atmp = _mrim_attempt_new(ATMP_REMOVE_CHAT, contact, chat);
+    atmp = _mrim_attempt_new(ATMP_REMOVE_CHAT, contact);
     g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
 
     purple_debug_info("mrim", "{%u} removing chat %s\n", (guint) md->tx_seq, contact->email);
@@ -1897,11 +1903,11 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
     else if (atmp->type == ATMP_REMOVE_CHAT) {
         if (pkt->status == CONTACT_OPER_SUCCESS) {
             g_hash_table_remove(md->contacts, atmp->remove_chat.contact->email);
-            purple_blist_remove_chat(atmp->remove_chat.chat);
         }
         else {
             purple_notify_error(md->account->gc, "Leaving chat",
                                         "Failed to remove chat on server", reason);
+            /* HOWTO undo deletion ? */
         }
     }
 
@@ -2081,6 +2087,10 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     PurpleChat *chat = NULL;
     GList *item = NULL;
 
+    /* clean d-bus handlers */
+    static int dbus_handle;
+    purple_signals_disconnect_by_handle(&dbus_handle);
+
     if (pkt->status != GET_CONTACTS_OK) {
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
@@ -2184,6 +2194,9 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
         }
     }
 
+    /* set d-bus handlers */
+    purple_signal_connect(purple_blist_get_handle(), "blist-node-removed", &dbus_handle, 
+            PURPLE_CALLBACK(_mrim_chat_removed_cb), md);
 }
 
 static void
@@ -2317,14 +2330,6 @@ mrim_blist_node_menu(PurpleBlistNode *node)
                     G_CALLBACK(_mrim_request_authorization_menu_cb), params, NULL);
                 list = g_list_append(list, action);
             }
-        }
-    }
-    if (PURPLE_BLIST_NODE_IS_CHAT(node)) {
-        if (contact = _mrim_contact_from_chat(PURPLE_CHAT(node))) {
-            md = _mrim_data_from_chat(PURPLE_CHAT(node));
-            action = purple_menu_action_new("Leave conference", 
-                G_CALLBACK(_mrim_chat_leave_menu_cb), PURPLE_CHAT(node), NULL);
-            list = g_list_append(list, action);
         }
     }
 
