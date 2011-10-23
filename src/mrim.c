@@ -332,6 +332,7 @@ typedef enum {
     ATMP_CONTACT_INFO,
     ATMP_CONTACT_SEARCH,
     ATMP_CREATE_CHAT,
+    ATMP_ACCEPT_CHAT,
     ATMP_REMOVE_CHAT,
     ATMP_INVITE_USER
 } MrimAttempType;
@@ -379,6 +380,9 @@ typedef struct {
         struct {
             gchar *email;
         } create_chat;
+        struct {
+            gchar *email;
+        } accept_chat;
         struct {
             gchar *email;
         } add_chat;
@@ -441,6 +445,9 @@ _mrim_attempt_new(MrimAttempType type, ...)
         case ATMP_CREATE_CHAT:
             atmp->create_chat.email = g_strdup(va_arg(rest, gchar*));
             break;
+        case ATMP_ACCEPT_CHAT:
+            atmp->accept_chat.email = g_strdup(va_arg(rest, gchar*));
+            break;
         case ATMP_REMOVE_CHAT:
             atmp->remove_chat.contact = va_arg(rest, MrimContact*);
             break;
@@ -486,6 +493,9 @@ _mrim_attempt_destroy(MrimAttempt *atmp)
             break;
         case ATMP_CREATE_CHAT:
             g_free(atmp->create_chat.email);
+            break;
+        case ATMP_ACCEPT_CHAT:
+            g_free(atmp->accept_chat.email);
             break;
         case ATMP_REMOVE_CHAT:
             break;
@@ -1420,9 +1430,10 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
             g_hash_table_replace(components, g_strdup("email"), g_strdup(from));
             chat = purple_chat_new(md->account, from, components);
             purple_blist_add_chat(chat, NULL, NULL);
-            mrim_pkt_build_add_chat(md, CONTACT_FLAG_MULTICHAT, purple_chat_get_name(chat), FALSE);
+            //mrim_pkt_build_add_chat(md, CONTACT_FLAG_MULTICHAT, purple_chat_get_name(chat), FALSE);
+            mrim_pkt_build_add_contact(md, CONTACT_FLAG_MULTICHAT, 0, from, from);
             _send_out(md);
-            MrimAttempt *atmp = _mrim_attempt_new(ATMP_CREATE_CHAT, from);
+            MrimAttempt *atmp = _mrim_attempt_new(ATMP_ACCEPT_CHAT, from);
             g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
             // TODO: we loose messages until chat created ?
         }
@@ -1814,6 +1825,24 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
         if (pkt->status == CONTACT_OPER_SUCCESS) {
             contact = mrim_contact_new(pkt->contact_id, 0, CONTACT_FLAG_MULTICHAT, STATUS_ONLINE, 0,
                                        mrim_normalize(md->account, pkt->contact_email), 
+                                       purple_chat_get_name(chat));
+            g_hash_table_replace(md->contacts, contact->email, contact);
+            GHashTable *components = purple_chat_get_components(chat);
+            g_hash_table_replace(components, g_strdup("email"), g_strdup(contact->email));
+            _mrim_chat_join(md, contact->email);
+        }
+        else {
+            purple_notify_error(md->account->gc, "Creating chat", 
+                                        "Failed to create chat contact on server", reason);
+            purple_blist_remove_chat(chat);
+        }
+    }
+
+    else if (atmp->type == ATMP_ACCEPT_CHAT) {
+        PurpleChat *chat = mrim_find_blist_chat(md->account, atmp->accept_chat.email);
+        if (pkt->status == CONTACT_OPER_SUCCESS) {
+            contact = mrim_contact_new(pkt->contact_id, 0, CONTACT_FLAG_MULTICHAT, STATUS_ONLINE, 0,
+                                       mrim_normalize(md->account, atmp->accept_chat.email), 
                                        purple_chat_get_name(chat));
             g_hash_table_replace(md->contacts, contact->email, contact);
             GHashTable *components = purple_chat_get_components(chat);
