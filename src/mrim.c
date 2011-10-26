@@ -17,6 +17,7 @@
 #define MRIM_AVATAR_MAX_FAILS 3
 #define MRIM_AVATAR_DELAY     2000
 #define MRIM_EMAIL_BUF_LEN 1024
+#define BIG_NUM 0xF0000000  // number big enougth, to prevent tx_seq to reach it
 
 
 /**************************************************/
@@ -332,7 +333,8 @@ typedef enum {
     ATMP_CONTACT_INFO,
     ATMP_CONTACT_SEARCH,
     ATMP_CREATE_CHAT,
-    ATMP_ACCEPT_CHAT,
+    ATMP_ACCEPT_CHAT1,
+    ATMP_ACCEPT_CHAT2,
     ATMP_REMOVE_CHAT,
     ATMP_INVITE_USER
 } MrimAttempType;
@@ -381,8 +383,12 @@ typedef struct {
             gchar *email;
         } create_chat;
         struct {
+            void *nothing;
+        } accept_chat1;
+        struct {
             gchar *email;
-        } accept_chat;
+            gchar *nick;
+        } accept_chat2;
         struct {
             gchar *email;
         } add_chat;
@@ -445,8 +451,11 @@ _mrim_attempt_new(MrimAttempType type, ...)
         case ATMP_CREATE_CHAT:
             atmp->create_chat.email = g_strdup(va_arg(rest, gchar*));
             break;
-        case ATMP_ACCEPT_CHAT:
-            atmp->accept_chat.email = g_strdup(va_arg(rest, gchar*));
+        case ATMP_ACCEPT_CHAT1:
+            break;
+        case ATMP_ACCEPT_CHAT2:
+            atmp->accept_chat2.email = g_strdup(va_arg(rest, gchar*));
+            atmp->accept_chat2.nick = g_strdup(va_arg(rest, gchar*));
             break;
         case ATMP_REMOVE_CHAT:
             atmp->remove_chat.contact = va_arg(rest, MrimContact*);
@@ -494,8 +503,11 @@ _mrim_attempt_destroy(MrimAttempt *atmp)
         case ATMP_CREATE_CHAT:
             g_free(atmp->create_chat.email);
             break;
-        case ATMP_ACCEPT_CHAT:
-            g_free(atmp->accept_chat.email);
+        case ATMP_ACCEPT_CHAT1:
+            break;
+        case ATMP_ACCEPT_CHAT2:
+            g_free(atmp->accept_chat2.email);
+            g_free(atmp->accept_chat2.nick);
             break;
         case ATMP_REMOVE_CHAT:
             break;
@@ -1424,24 +1436,36 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
     if (flags & MESSAGE_FLAG_NOTIFY) {
         // chats does not support typing, just ignore
     }
+    else if (!g_hash_table_lookup(md->contacts, from)) {
+        // incoming message, while chat is not exist
+        // we were invited to new chat.
+        mrim_pkt_build_chat_get_members(md, 0, from);
+        _send_out(md);
+        MrimAttempt *atmp = _mrim_attempt_new(ATMP_ACCEPT_CHAT1);
+        // HACK: chat_members packet is not an reply to get_members, 
+        // so we can't use tx_seq as attemp number.
+        // But we can use chat id - it will work in most cases.
+        g_hash_table_insert(md->attempts, (gpointer) (BIG_NUM + chat_email2id(from)), atmp);
+    }
     else {
-        if (!g_hash_table_lookup(md->contacts, from)) {
-            GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-            g_hash_table_replace(components, g_strdup("email"), g_strdup(from));
-            chat = purple_chat_new(md->account, from, components);
-            purple_blist_add_chat(chat, NULL, NULL);
-            //mrim_pkt_build_add_chat(md, CONTACT_FLAG_MULTICHAT, purple_chat_get_name(chat), FALSE);
-            mrim_pkt_build_add_contact(md, CONTACT_FLAG_MULTICHAT, 0, from, from);
-            _send_out(md);
-            MrimAttempt *atmp = _mrim_attempt_new(ATMP_ACCEPT_CHAT, from);
-            g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
-            // TODO: we loose messages until chat created ?
-        }
         conv = _mrim_chat_join(md, from);
         purple_conv_chat_write(PURPLE_CONV_CHAT(conv), who_part, msg_part, PURPLE_MESSAGE_RECV, time(NULL));
     }
 
     g_free(clean);
+}
+
+static void
+_mrim_accept_chat(MrimData *md, gchar *email, gchar *nick)
+{
+    GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+    g_hash_table_replace(components, g_strdup("email"), g_strdup(email));
+    PurpleChat *chat = purple_chat_new(md->account, nick, components);
+    purple_blist_add_chat(chat, NULL, NULL);
+    mrim_pkt_build_add_contact(md, CONTACT_FLAG_MULTICHAT, 0, email, nick);
+    _send_out(md);
+    MrimAttempt *atmp = _mrim_attempt_new(ATMP_ACCEPT_CHAT2, email, nick);
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
 }
 
 static void
@@ -1451,7 +1475,25 @@ _chat_dispatch_members(MrimData *md, MrimPktMessageAck *pkt, MrimPktChatMembers 
     PurpleChat *chat = NULL;
     PurpleConversation *conv = NULL;
     PurpleConvChat *conv_chat = NULL;
+    MrimAttempt *atmp = NULL;
     gchar *email = NULL;
+
+    // special case: receiving chat members before accepting chat (just for nick)
+    // HACK: chat_members packet is not an reply to get_members, 
+    // so we can't use tx_seq as attemp number.
+    // But we can use chat id - it will work in most cases.
+    gpointer atmp_id = (gpointer) (BIG_NUM + chat_email2id(pkt->from));
+    if (atmp = g_hash_table_lookup(md->attempts, atmp_id)) {
+        if (atmp->type == ATMP_ACCEPT_CHAT1) {
+            _mrim_accept_chat(md, pkt->from, chat_pkt->nick);
+            g_hash_table_remove(md->attempts, atmp_id);
+            return;
+        }
+        else {
+            purple_debug_warning("mrim", "_chat_dispatch_members: unexpected attempt %u\n", atmp->type);
+            g_hash_table_remove(md->attempts, atmp_id);
+        }
+    }
 
     if (!(chat = mrim_find_blist_chat(md->account, pkt->from))) {
         purple_debug_error("mrim", "_chat_dispatch_members: no blist chat for email %s\n", pkt->from);
@@ -1476,8 +1518,8 @@ _chat_dispatch_members(MrimData *md, MrimPktMessageAck *pkt, MrimPktChatMembers 
 
     // remove old members from the chat
     for (item = purple_conv_chat_get_users(conv_chat); item; item = g_list_next(item)) {
-        email = purple_conv_chat_cb_get_name((PurpleConvChatBuddy*) item->data);
-        if (!g_list_find_custom(chat_pkt->members, email, g_strcmp0)) {
+        email = (gchar*) purple_conv_chat_cb_get_name((PurpleConvChatBuddy*) item->data);
+        if (!g_list_find_custom(chat_pkt->members, email, (GCompareFunc) g_strcmp0)) {
             purple_conv_chat_remove_user(conv_chat, email, NULL);
         }
     }
@@ -1682,7 +1724,8 @@ _dispatch_message_status(MrimData *md, MrimPktMessageStatus *pkt)
             }
         }
         else {
-            purple_debug_error("mrim", "_dispatch_message_status: incorrect attempt type\n");
+            purple_debug_error("mrim", "_dispatch_message_status: incorrect attempt type %u\n",
+                                            atmp->type);
         }
     }
     else {
@@ -1838,15 +1881,13 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
         }
     }
 
-    else if (atmp->type == ATMP_ACCEPT_CHAT) {
-        PurpleChat *chat = mrim_find_blist_chat(md->account, atmp->accept_chat.email);
+    else if (atmp->type == ATMP_ACCEPT_CHAT2) {
+        PurpleChat *chat = mrim_find_blist_chat(md->account, atmp->accept_chat2.email);
         if (pkt->status == CONTACT_OPER_SUCCESS) {
             contact = mrim_contact_new(pkt->contact_id, 0, CONTACT_FLAG_MULTICHAT, STATUS_ONLINE, 0,
-                                       mrim_normalize(md->account, atmp->accept_chat.email), 
-                                       purple_chat_get_name(chat));
+                                       mrim_normalize(md->account, atmp->accept_chat2.email), 
+                                       atmp->accept_chat2.nick);
             g_hash_table_replace(md->contacts, contact->email, contact);
-            GHashTable *components = purple_chat_get_components(chat);
-            g_hash_table_replace(components, g_strdup("email"), g_strdup(contact->email));
             _mrim_chat_join(md, contact->email);
         }
         else {
