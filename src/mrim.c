@@ -336,6 +336,7 @@ typedef enum {
     ATMP_ACCEPT_CHAT1,
     ATMP_ACCEPT_CHAT2,
     ATMP_REMOVE_CHAT,
+    ATMP_RENAME_CHAT,
     ATMP_INVITE_USER
 } MrimAttempType;
 
@@ -396,6 +397,10 @@ typedef struct {
             MrimContact *contact;
             PurpleChat *chat;
         } remove_chat;
+        struct {
+            MrimContact *contact;
+            gchar* new_nick;
+        } rename_chat;
         struct {
             gchar *email;
             gchar *who;
@@ -460,6 +465,10 @@ _mrim_attempt_new(MrimAttempType type, ...)
         case ATMP_REMOVE_CHAT:
             atmp->remove_chat.contact = va_arg(rest, MrimContact*);
             break;
+        case ATMP_RENAME_CHAT:
+            atmp->rename_chat.contact = va_arg(rest, MrimContact*);
+            atmp->rename_chat.new_nick = g_strdup(va_arg(rest, gchar*));
+            break;
         case ATMP_INVITE_USER:
             atmp->invite_user.email = g_strdup(va_arg(rest, gchar*));
             atmp->invite_user.who = g_strdup(va_arg(rest, gchar*));
@@ -510,6 +519,9 @@ _mrim_attempt_destroy(MrimAttempt *atmp)
             g_free(atmp->accept_chat2.nick);
             break;
         case ATMP_REMOVE_CHAT:
+            break;
+        case ATMP_RENAME_CHAT:
+            g_free(atmp->rename_chat.new_nick);
             break;
         case ATMP_INVITE_USER:
             g_free(atmp->invite_user.email);
@@ -1369,7 +1381,7 @@ _mrim_chat_removed_cb(PurpleBlistNode *node, gpointer ptr)
     chat = PURPLE_CHAT(node);
     contact = _mrim_contact_from_chat(chat);
     if (!contact) {
-        purple_debug_error("mrim", "remove buddy: failed to find mrim contact for chat %s\n", 
+        purple_debug_error("mrim", "_mrim_chat_removed_cb: failed to find mrim contact for chat %s\n", 
                             purple_chat_get_name(chat));
         return;
     }
@@ -1382,6 +1394,38 @@ _mrim_chat_removed_cb(PurpleBlistNode *node, gpointer ptr)
     g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
 
     purple_debug_info("mrim", "{%u} removing chat %s\n", (guint) md->tx_seq, contact->email);
+}
+
+static void
+_mrim_chat_aliased_cb(PurpleBlistNode *node, gchar *old_nick, gpointer ptr)
+{
+    MrimData* md = (MrimData*) ptr;
+    PurpleBlistNodeType type = purple_blist_node_get_type(node);
+    PurpleChat *chat;
+    MrimAttempt *atmp = NULL;
+    MrimContact *contact = NULL;
+    gchar *new_nick = NULL;
+    
+    if (type != PURPLE_BLIST_CHAT_NODE) {
+        return;
+    }
+
+    chat = PURPLE_CHAT(node);
+    new_nick = purple_chat_get_name(chat);
+    contact = _mrim_contact_from_chat(chat);
+    if (!contact) {
+        purple_debug_error("mrim", "_mrim_chat_aliased_cb buddy: failed to find contact for chat %s\n", new_nick);
+        return;
+    }
+
+    purple_debug_info("mrim", "{%u} renaming chat %s (%u) to %s\n", (guint) md->tx_seq, 
+                                contact->email, contact->id, new_nick);
+
+    mrim_pkt_build_modify_contact(md, contact->id, contact->flags, contact->group_id, contact->email, new_nick);
+    _send_out(md);
+
+    atmp = _mrim_attempt_new(ATMP_RENAME_CHAT, contact, new_nick);
+    g_hash_table_insert(md->attempts, (gpointer) md->tx_seq, atmp);
 }
 
 void 
@@ -1981,6 +2025,17 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
         }
     }
 
+    else if (atmp->type == ATMP_RENAME_CHAT) {
+        if (pkt->status == CONTACT_OPER_SUCCESS) {
+            _mrim_contact_set_nick(atmp->rename_contact.contact, atmp->rename_contact.new_nick);
+        }
+        else {
+            purple_notify_error(md->account->gc, "Renaming chat",
+                                        "Failed to rename chat on server", reason);
+            /* HOWTO undo renaming ? */
+        }
+    }
+
     else {
         purple_debug_warning("mrim", "unexpected type of attempt for seq %u\n", 
                                     (guint) pkt->header.seq);
@@ -2267,6 +2322,8 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     /* set d-bus handlers */
     purple_signal_connect(purple_blist_get_handle(), "blist-node-removed", &dbus_handle, 
             PURPLE_CALLBACK(_mrim_chat_removed_cb), md);
+    purple_signal_connect(purple_blist_get_handle(), "blist-node-aliased", &dbus_handle, 
+            PURPLE_CALLBACK(_mrim_chat_aliased_cb), md);
 }
 
 static void
