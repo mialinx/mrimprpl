@@ -7,6 +7,10 @@
 
 typedef mrim_packet_header_t MrimPktHeader;
 typedef gchar* Uidl;
+typedef struct {
+    guint32 dlen;
+    guint32 type;
+} MrimPktChatHeader;
 
 /* Common routines */
 void
@@ -28,15 +32,26 @@ mrim_pkt_build_change_status(MrimData *md, guint32 status);
 
 void
 mrim_pkt_build_add_contact(MrimData *md, guint32 flags, guint32 group_id, 
-                    const gchar *email, const gchar *name);
+                    const gchar *email, const gchar *nick);
+
+void
+mrim_pkt_build_add_chat(MrimData *md, guint32 flags, const gchar *nick, 
+                    const gboolean private_chat);
                     
 void
 mrim_pkt_build_modify_contact(MrimData *md, guint32 id, guint32 flags, guint32 group_id, 
-                    const gchar *email, const gchar *name);
+                    const gchar *email, const gchar *nick);
 
 void
 mrim_pkt_build_message(MrimData *md, guint32 flags, const gchar *to, const gchar *message, 
                     const gchar *rtf_message);
+
+void
+mrim_pkt_build_chat_get_members(MrimData *md, guint32 flags, const gchar* email);
+
+void
+mrim_pkt_build_chat_invite(MrimData *md, guint32 flags, const gchar* email, 
+                    const gchar *who, const gchar *message);
 
 void
 mrim_pkt_build_message_recv(MrimData *md, gchar *from, guint32 msg_id);
@@ -97,6 +112,7 @@ typedef struct {
     MrimPktHeader header;
     guint32 status;
     guint32 contact_id;
+    gchar *contact_email;
 } MrimPktAddContactAck;
 
 typedef struct {
@@ -111,7 +127,39 @@ typedef struct {
     gchar *from;
     gchar *message;
     gchar *rtf_message;
+    MrimPktChatHeader *multichat;
 } MrimPktMessageAck;
+
+/* chat */
+typedef struct {
+    MrimPktChatHeader header;
+    gchar *sender;
+} MrimPktChatMessage;
+
+typedef struct {
+    MrimPktChatHeader header;
+    gchar *nick;
+    GList *members;
+    gchar *owner;
+} MrimPktChatMembers;
+
+typedef struct {
+    MrimPktChatHeader header;
+    gchar *sender;
+    GList *members;
+} MrimPktChatAddMembers;
+
+typedef struct {
+    MrimPktChatHeader header;
+    gchar *member;
+} MrimPktChatAttached;
+
+typedef struct {
+    MrimPktChatHeader header;
+    gchar *member;
+} MrimPktChatDetached;
+
+/* /chat */
 
 typedef struct {
     MrimPktHeader header;
