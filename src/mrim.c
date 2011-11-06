@@ -1406,6 +1406,7 @@ _mrim_chat_aliased_cb(PurpleBlistNode *node, gchar *old_nick, gpointer ptr)
     MrimData* md = (MrimData*) ptr;
     PurpleBlistNodeType type = purple_blist_node_get_type(node);
     PurpleChat *chat;
+    PurpleConversation *conv;
     MrimAttempt *atmp = NULL;
     MrimContact *contact = NULL;
     gchar *new_nick = NULL;
@@ -1420,6 +1421,13 @@ _mrim_chat_aliased_cb(PurpleBlistNode *node, gchar *old_nick, gpointer ptr)
     if (!contact) {
         purple_debug_error("mrim", "_mrim_chat_aliased_cb buddy: failed to find contact for chat %s\n", new_nick);
         return;
+    }
+
+    // fix.. libpurple forget to change conversation name when chat aliased..
+    conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, old_nick, md->account);
+    if (conv) {
+        purple_conversation_set_name(conv, purple_chat_get_name(chat));
+        purple_conversation_autoset_title(conv);
     }
 
     purple_debug_info("mrim", "{%u} renaming chat %s (%u) to %s\n", (guint) md->tx_seq, 
