@@ -8,7 +8,7 @@
 
 #define MAX_GROUP 20
 #define UIDL_LEN 8
-#define PKT_LEN(pkt) (GUINT32_FROM_LE(pkt->dlen) + sizeof(MrimPktHeader))
+#define PKT_LEN(pkt) (GUINT32_FROM_LE((pkt)->dlen) + sizeof(MrimPktHeader))
 #define LPS_LEN(lps) (GUINT32_FROM_LE((lps)->length) + sizeof((lps)->length))
 
 typedef struct {
@@ -601,7 +601,7 @@ mrim_pkt_build_offline_message_del(MrimData *md, Uidl uidl)
 static MrimPktHeader*
 _collect(MrimData *md)
 {
-    guint32 available = 0;
+    guint32 available = 0, pkt_len = 0;
     gint need_read = 0;
     MrimPktHeader *pkt = NULL;
 
@@ -619,10 +619,10 @@ _collect(MrimData *md)
             purple_circ_buffer_mark_read(md->server.rx_buf, MIN(need_read, available));
         }
     }
-    pkt = (MrimPktHeader*) md->server.rx_pkt_buf->str;
+    pkt_len = PKT_LEN((MrimPktHeader*) md->server.rx_pkt_buf->str);
 
     /* copy whole packet to the linear buffer */
-    while ((need_read = PKT_LEN(pkt) - md->server.rx_pkt_buf->len) > 0) {
+    while ((need_read = pkt_len - md->server.rx_pkt_buf->len) > 0) {
         if (!(available = purple_circ_buffer_get_max_read(md->server.rx_buf))) {
             return NULL;
         }
