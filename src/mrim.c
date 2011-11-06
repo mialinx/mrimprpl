@@ -2261,20 +2261,27 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
             }
             g_hash_table_replace(md->contacts, contact->email, contact);
             if (is_chat_email(contact->email)) {
-                while (chat = mrim_find_blist_chat(md->account, contact->email)) {
-                    purple_blist_remove_chat(chat);
+                if (chat = mrim_find_blist_chat(md->account, contact->email)) {
+                    purple_blist_alias_chat(chat, contact->nick);
                 }
-                GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-                g_hash_table_replace(components, g_strdup("email"), g_strdup(contact->email));
-                chat = purple_chat_new(md->account, contact->nick, components);
+                else {
+                    GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+                    g_hash_table_replace(components, g_strdup("email"), g_strdup(contact->email));
+                    chat = purple_chat_new(md->account, contact->nick, components);
+                }
+                // agent holds all chats in one group "chats", so we do
                 purple_blist_add_chat(chat, NULL, NULL);
             }
             else {
+                // we preserve libpurple's contacts, but overwrites groups from server
                 if (buddy = purple_find_buddy(md->account, contact->email)) {
-                    purple_blist_remove_buddy(buddy);
+                    purple_blist_alias_buddy(buddy, contact->nick);
                 }
-                buddy = purple_buddy_new(md->account, contact->email, contact->nick);
-                purple_blist_add_buddy(buddy, NULL, group, NULL);
+                else {
+                    buddy = purple_buddy_new(md->account, contact->email, contact->nick);
+                }
+                // purple_blist_add_buddy will actually move exists buddy to proper place
+                purple_blist_add_buddy(buddy, purple_buddy_get_contact(buddy), group, NULL);
                 purple_prpl_got_user_status(md->account, contact->email, 
                                         _status_mrim2purple(contact->status), NULL);
             }
