@@ -601,6 +601,7 @@ _canread_cb(gpointer data, gint source, PurpleInputCondition cond)
 {
     MrimData *md = NULL;
     gint bytes_read = 0;
+    guint bytes_unparsed = 0;
     #define MRIM_ITERM_BUFF_LEN (4 * 1024)
     gchar buff[MRIM_ITERM_BUFF_LEN];
     MrimPktHeader *pkt = NULL;
@@ -609,8 +610,11 @@ _canread_cb(gpointer data, gint source, PurpleInputCondition cond)
     while ((bytes_read = read(source, buff, MRIM_ITERM_BUFF_LEN)) > 0) {
         purple_circ_buffer_append(md->server.rx_buf, buff, bytes_read);
     }
+    bytes_unparsed = purple_circ_buffer_get_max_read(md->server.rx_buf);
 
-    if (bytes_read == 0 || (bytes_read < 0 && errno != EWOULDBLOCK)) {
+    if ((bytes_read < 0 && errno != EWOULDBLOCK) || // real error 
+        (bytes_read == 0 && bytes_unparsed == 0))   // we reached EOF and parsed last packet
+    {
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
             "Server connection was lost"
