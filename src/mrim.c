@@ -2278,36 +2278,43 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
     }
 
     // remove deleted contacts and chats
-    PurpleBlistNode *node, *group_node;
+    PurpleBlistNode *node;
+    GList *buddies_to_delete = NULL, *chats_to_delete = NULL;
 
-    for (group_node = purple_blist_get_root(); 
-         group_node != NULL; 
-         group_node = purple_blist_node_next(group_node, TRUE)) 
+    for (node = purple_blist_get_root();
+         node != NULL; 
+         node = purple_blist_node_next(node, TRUE)) 
     {
-        for (node = purple_blist_node_get_first_child(group_node);
-             node != NULL; 
-             node = purple_blist_node_next(node, TRUE)) 
-        {
-            if (PURPLE_BLIST_NODE_IS_CHAT(node)) {
-                chat = (PurpleChat*) node;
-                GHashTable *components = purple_chat_get_components(chat);
-                gchar *email = g_hash_table_lookup(components, "email");
-                if (md->account == purple_chat_get_account(chat) && email
-                    && !g_hash_table_lookup(md->contacts, email))
-                {
-                    purple_blist_remove_chat(chat);
-                }
+        if (PURPLE_BLIST_NODE_IS_CHAT(node)) {
+            chat = (PurpleChat*) node;
+            GHashTable *components = purple_chat_get_components(chat);
+            gchar *email = g_hash_table_lookup(components, "email");
+            if (md->account == purple_chat_get_account(chat) && email
+                && !g_hash_table_lookup(md->contacts, email))
+            {
+                chats_to_delete = g_list_append(chats_to_delete, chat);
             }
-            if (PURPLE_BLIST_NODE_IS_BUDDY(node)) {
-                buddy = (PurpleBuddy*) node;
-                if (md->account == purple_buddy_get_account(buddy)
-                    && !g_hash_table_lookup(md->contacts, purple_buddy_get_name(buddy)))
-                {
-                    purple_blist_remove_buddy(buddy);
-                }
+        }
+        if (PURPLE_BLIST_NODE_IS_BUDDY(node)) {
+            buddy = (PurpleBuddy*) node;
+            if (md->account == purple_buddy_get_account(buddy)
+                && !g_hash_table_lookup(md->contacts, purple_buddy_get_name(buddy)))
+            {
+                buddies_to_delete = g_list_append(buddies_to_delete, buddy);
             }
         }
     }
+    buddies_to_delete = g_list_first(buddies_to_delete);
+    chats_to_delete = g_list_first(chats_to_delete);
+    for (item = buddies_to_delete; item; item = g_list_next(item)) {
+        purple_blist_remove_buddy((PurpleBuddy*) item->data);
+    }
+    for (item = chats_to_delete; item; item = g_list_next(item)) {
+        purple_blist_remove_chat((PurpleChat*) item->data);
+    }
+    g_list_free(buddies_to_delete);
+    g_list_free(chats_to_delete);
+
 
     /* set d-bus handlers */
     purple_signal_connect(purple_blist_get_handle(), "blist-node-removed", &dbus_handle, 
