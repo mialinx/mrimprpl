@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <locale.h>
+#include <time.h>
 #include "pkt.h"
 
 /* Common utils */
@@ -552,7 +553,7 @@ mrim_pkt_build_wp_request(MrimData *md, guint32 count, ...)
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
     for (i = 0; i < sizeof(order) / sizeof(guint32); i++) {
         key = order[i];
-        if (val = g_hash_table_lookup(params, (gpointer) key)) {
+        if ((val = g_hash_table_lookup(params, (gpointer) key))) {
             key = GUINT32_TO_LE(key);
             purple_circ_buffer_append(md->server.tx_buf, &key, sizeof(key));
             purple_circ_buffer_append(md->server.tx_buf, val, LPS_LEN(val));
@@ -698,14 +699,6 @@ _skip_lps(gpointer ptr, guint32 *pos)
 {
     MrimPktLps *lps = (MrimPktLps*) (ptr + *pos);
     *pos += LPS_LEN(lps);
-}
-
-static gchar*
-_read_str(gpointer ptr, guint32 *pos)
-{
-    gchar *str = g_strdup(ptr + *pos);
-    *pos += strlen(str);
-    return str;
 }
 
 static void
@@ -884,9 +877,8 @@ _chat_subpkt_parse(MrimPktChatHeader *pkt)
             return (MrimPktChatHeader*) _chat_parse_detached(pkt);
             break;
         default:
-            #ifdef ENABLE_MRIM_DEBUG
-            purple_debug_info("mrim", "parsing unsupported type of chat packet %x\n", type);
-            #endif
+            purple_debug_warning("mrim", "parsing unsupported type of chat packet %x\n", 
+                GUINT32_FROM_LE(pkt->type));
             return NULL;
             break;
     }
@@ -1065,10 +1057,10 @@ _parse_offline_message_ack(MrimPktHeader *pkt)
                 break;
             case BODY:
                 if (boundary) {
-                    if (v = g_strstr_len(p, -1, boundary)) {
+                    if ((v = g_strstr_len(p, -1, boundary))) {
                         loc->message = g_strndup(p, v - p);
                         p = v + strlen(boundary);
-                        if (v = g_strstr_len(p, -1, boundary)) {
+                        if ((v = g_strstr_len(p, -1, boundary))) {
                             loc->rtf_message = g_strndup(p, v - p);
                         }
                         else {
@@ -1194,9 +1186,8 @@ static MrimPktAnketaInfo*
 _parse_anketa_info(MrimPktHeader *pkt)
 {
     guint32 pos = 0;
-    int i = 0;
+    guint i = 0;
     GHashTable *user = NULL;
-    gchar *val = NULL;
     MrimPktAnketaInfo *loc = g_new0(MrimPktAnketaInfo, 1);
 
     _read_header(pkt, &loc->header, &pos);
@@ -1260,7 +1251,7 @@ _parse_contact_list(MrimPktHeader *pkt)
     for (id = 0; id < groups_count; id++) {
          flags = _read_ul(pkt, &pos);
          nick = _read_lps_cp1251(pkt, &pos);
-         MrimGroup *group = mrim_group_new(id, flags, nick);
+         group = mrim_group_new(id, flags, nick);
          g_free(nick);
          loc->groups = g_list_append(loc->groups, group);
          if (!_skip_by_mask(pkt, &pos, group_mask + 2)) {
@@ -1419,10 +1410,8 @@ mrim_pkt_parse(MrimData *md)
             loc = (MrimPktHeader*) _parse_contact_list(pkt);
             break;
         default:
-            #ifdef ENABLE_MRIM_DEBUG
-            purple_debug_info("mrim", "parsing unsupported type of packet %x\n", 
-                (guint32) GUINT32_FROM_LE(pkt->msg));
-            #endif
+            purple_debug_warning("mrim", "parsing unsupported type of packet %x\n", 
+                GUINT32_FROM_LE(pkt->msg));
             break;
             
     }
@@ -1484,10 +1473,7 @@ mrim_pkt_free(MrimPktHeader *loc)
                 _free_contact_list((MrimPktContactList*) loc);
                 break;
             default:
-                #ifdef ENABLE_MRIM_DEBUG
-                purple_debug_info("mrim", "freeing unsupported type of packet %u\n", 
-                    (guint32) loc->msg);
-                #endif
+                purple_debug_warning("mrim", "freeing unsupported type of packet %u\n", (guint32) loc->msg);
                 break;
         }
     }

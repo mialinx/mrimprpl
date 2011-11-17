@@ -17,7 +17,7 @@ It supports:
 BUILDING AND INSTALLING
 -----------------------
 
-./configure --prefix=your_prefix
+./configure --prefix=your_prefix [--disable-mrim-avatars]
 make
 sudo make install
 
@@ -30,7 +30,4 @@ make ti
 The second variant will install plugin in your $HOME/.purple/plugins directory.
 You will not see nice @ icon, but preseve system directories clean.
 
-To avoid warnings about intger to pointer conversion on 64bit systems
-build library with -Wno-int-to-pointer-cast
-
-make CFLAGS='-Wno-int-to-pointer-cast'
+--disable-mrim-avatars option may help if avatar loading hangs your pidgin

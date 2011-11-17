@@ -24,12 +24,6 @@
 /************* MINOR UTILS ************************/
 /**************************************************/
 
-static void
-ghf_dump(gpointer key, gpointer val, gpointer udata)
-{
-   fprintf(stderr, "%s %s -> %s\n", udata, key, val); 
-}
-
 static gboolean
 is_chat_email(const char *email)
 {
@@ -39,7 +33,7 @@ is_chat_email(const char *email)
 static gint
 chat_email2id(const char *email)
 {
-    if (!is_chat_email) {
+    if (!is_chat_email(email)) {
         return 0;
     }
     return atoi(email);
@@ -116,16 +110,6 @@ _mrim_contact_free(gpointer ptr)
     _mrim_contact_destroy((MrimContact*) ptr);
 }
 
-static guint
-_mrim_contact_email2id(MrimData *md, const gchar* email)
-{
-    if (!email || email[0] == '\0') {
-        return 0;
-    }
-    MrimContact* contact = g_hash_table_lookup(md->contacts, email);
-    return contact ? contact->id : 0;
-}
-
 static MrimGroup*
 _mrim_contact_get_group(MrimData *md, MrimContact *contact)
 {
@@ -148,10 +132,9 @@ _mrim_data_from_buddy(PurpleBuddy *buddy)
 {
     PurpleAccount *account = NULL;
     PurpleConnection *gc = NULL;
-    MrimData *md = NULL;
 
-    if (account = purple_buddy_get_account(buddy)) {
-        if (gc = purple_account_get_connection(account)) {
+    if ((account = purple_buddy_get_account(buddy))) {
+        if ((gc = purple_account_get_connection(account))) {
             return (MrimData*) gc->proto_data;
         }
     }
@@ -163,10 +146,9 @@ _mrim_data_from_chat(PurpleChat *chat)
 {
     PurpleAccount *account = NULL;
     PurpleConnection *gc = NULL;
-    MrimData *md = NULL;
 
-    if (account = purple_chat_get_account(chat)) {
-        if (gc = purple_account_get_connection(account)) {
+    if ((account = purple_chat_get_account(chat))) {
+        if ((gc = purple_account_get_connection(account))) {
             return (MrimData*) gc->proto_data;
         }
     }
@@ -177,9 +159,8 @@ static MrimContact*
 _mrim_contact_from_buddy(PurpleBuddy *buddy) 
 {
     MrimData *md = NULL;
-    MrimContact *contact = NULL;
 
-    if (md = _mrim_data_from_buddy(buddy)) {
+    if ((md = _mrim_data_from_buddy(buddy))) {
         return (MrimContact*) g_hash_table_lookup(md->contacts, purple_buddy_get_name(buddy));
     }
     return NULL;
@@ -189,10 +170,9 @@ static MrimContact*
 _mrim_contact_from_chat(PurpleChat *chat) 
 {
     MrimData *md = NULL;
-    MrimContact *contact = NULL;
     gchar *email = NULL;
 
-    if (md = _mrim_data_from_chat(chat)) {
+    if ((md = _mrim_data_from_chat(chat))) {
         email = g_hash_table_lookup(purple_chat_get_components(chat), "email");
         if (!email) {
             return NULL;
@@ -226,7 +206,6 @@ _mrim_group_rename(MrimData *md, MrimGroup *group, const gchar *new_nick)
 static guint32
 _status_purple2mrim(PurpleStatus *status)
 {
-    guint32 mrim_status = 0;
     PurpleStatusType *type = purple_status_get_type(status);
     switch (purple_status_type_get_primitive(type)) {
         case PURPLE_STATUS_AVAILABLE:
@@ -550,7 +529,7 @@ _canwrite_cb(gpointer data, gint source, PurpleInputCondition cond)
     guint max_read = 0;
     gint bytes_written = 0;
 
-    while (max_read = purple_circ_buffer_get_max_read(md->server.tx_buf)) {
+    while ((max_read = purple_circ_buffer_get_max_read(md->server.tx_buf))) {
         bytes_written = write(source, md->server.tx_buf->outptr, max_read);
         if (bytes_written > 0) {
             purple_circ_buffer_mark_read(md->server.tx_buf, bytes_written);
@@ -623,7 +602,7 @@ _canread_cb(gpointer data, gint source, PurpleInputCondition cond)
         md->server.read_handle = 0;
     }
     else {
-        while (pkt = mrim_pkt_parse(md)) {
+        while ((pkt = mrim_pkt_parse(md))) {
             _dispatch(md, pkt);
             if (pkt->msg == MRIM_CS_LOGOUT) {
                 mrim_pkt_free(pkt);
@@ -977,7 +956,7 @@ mrim_send_im(PurpleConnection *gc, const gchar *who, const gchar *message, Purpl
 unsigned int 
 mrim_send_typing(PurpleConnection *gc, const char *email, PurpleTypingState state)
 {
-    if (state = PURPLE_TYPING) {
+    if (state == PURPLE_TYPING) {
         _mrim_send_message((MrimData*) gc->proto_data, email, " ", 
                             MESSAGE_FLAG_NOTIFY|MESSAGE_FLAG_NORECV);
         return MRIM_TYPING_TIMEOUT;
@@ -1012,14 +991,6 @@ _mrim_auth_params_free(MrimAuthParams *params)
         g_free(params->email);
         g_free(params);
     }
-}
-
-static void
-_mrim_request_authorization_cb(gpointer ptr, gchar *message)
-{
-    MrimAuthParams *params = (MrimAuthParams*) ptr;
-    _mrim_send_message(params->md, params->email, message, MESSAGE_FLAG_AUTHORIZE);
-    _mrim_auth_params_free(params);
 }
 
 static void
@@ -1105,6 +1076,9 @@ _mrim_fetch_avatar_cb(PurpleUtilFetchUrlData *url_data, gpointer user_data,
 static void
 _mrim_fetch_avatar(MrimData *md, const gchar *email)
 {
+    #ifdef DISABLE_MRIM_AVATARS
+    return;
+    #endif
     gchar* box = g_strdup(email);
     gchar* at  = g_strstr_len(box, -1, "@");
     gchar* dot = g_strstr_len(at, -1, ".");
@@ -1318,7 +1292,7 @@ _mrim_chat_join(MrimData *md, gchar *email)
 
     if (!is_chat_email(email)) {
         purple_debug_error("mrim", "_mrim_chat_join: attempt to join with bad email: '%s'\n", email);
-        return;
+        return NULL;
     }
     purple_debug_info("mrim", "_mrim_chat_join: loading memebers for chat %s\n", email);
     chat = mrim_find_blist_chat(md->account, email);
@@ -1409,7 +1383,7 @@ _mrim_chat_aliased_cb(PurpleBlistNode *node, gchar *old_nick, gpointer ptr)
     PurpleConversation *conv;
     MrimAttempt *atmp = NULL;
     MrimContact *contact = NULL;
-    gchar *new_nick = NULL;
+    const gchar *new_nick = NULL;
     
     if (type != PURPLE_BLIST_CHAT_NODE) {
         return;
@@ -1470,16 +1444,14 @@ mrim_chat_send(PurpleConnection *gc, gint id, const gchar *message, PurpleMessag
 static void
 _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *message)
 {
-    PurpleConnection *gc = purple_account_get_connection(md->account);
     PurpleConversation *conv = NULL;
-    MrimAuthParams *auth_params = NULL;
-    PurpleChat *chat = NULL;
     gchar *clean = NULL, *who_part = NULL, *msg_part = NULL, *delim = NULL;
 
     purple_debug_info("mrim", "chat message from %s flags 0x%08x\n == \n%s\n == \n", from, (guint) flags, message);
 
     clean = purple_markup_escape_text(message, -1);
-    if (delim = g_strstr_len(clean, -1, ":\r\n")) {
+    delim = g_strstr_len(clean, -1, ":\r\n");
+    if (delim) {
         *delim = '\0';
         who_part = clean;
         msg_part = delim + 3;
@@ -1539,7 +1511,7 @@ _chat_dispatch_members(MrimData *md, MrimPktMessageAck *pkt, MrimPktChatMembers 
     // so we can't use tx_seq as attemp number.
     // But we can use chat id - it will work in most cases.
     gpointer atmp_id = (gpointer) (BIG_NUM + chat_email2id(pkt->from));
-    if (atmp = g_hash_table_lookup(md->attempts, atmp_id)) {
+    if ((atmp = g_hash_table_lookup(md->attempts, atmp_id))) {
         if (atmp->type == ATMP_ACCEPT_CHAT1) {
             _mrim_accept_chat(md, pkt->from, chat_pkt->nick);
             g_hash_table_remove(md->attempts, atmp_id);
@@ -1744,7 +1716,6 @@ _dispatch_message_status(MrimData *md, MrimPktMessageStatus *pkt)
 {
     MrimAttempt *atmp = NULL;
     PurpleConversation *conv = NULL;
-    PurpleChat *chat = NULL;
     const gchar* reason = _message_delivery_reason(pkt->status);
     const guint32 noecho_flags = (MESSAGE_FLAG_CONTACT|MESSAGE_FLAG_NOTIFY|MESSAGE_FLAG_AUTHORIZE);
 
@@ -1821,8 +1792,8 @@ _dispatch_user_info(MrimData *md, MrimPktUserInfo *pkt)
     const gchar *new_alias = g_hash_table_lookup(pkt->info, "MRIM.NICKNAME");
     
     for (item = g_hash_table_get_keys(pkt->info); item; item = g_list_next(item)) {
-        purple_debug_misc("mrim", "user info '%s'='%s'\n", item->data, 
-                        g_hash_table_lookup(pkt->info, item->data));
+        purple_debug_misc("mrim", "user info '%s'='%s'\n", (gchar*) item->data, 
+                        (gchar*) g_hash_table_lookup(pkt->info, item->data));
     }
     g_list_free(g_list_first(item));
 
@@ -2088,7 +2059,7 @@ _dispatch_authorize_ack(MrimData *md, MrimPktAuthorizeAck *pkt)
         }
     }
     else {
-        purple_debug_warning("mrim", "_dispatch_authorize_ack", "User %s was not found\n", pkt->email);
+        purple_debug_warning("mrim", "_dispatch_authorize_ack: user %s was not found\n", pkt->email);
     }
 }
 
@@ -2123,7 +2094,7 @@ static void
 _dispatch_contact_info(MrimData *md, gchar *email, MrimPktAnketaInfo *pkt)
 {
     GHashTable *user = NULL;
-    gchar *key = NULL, *val = NULL;
+    gchar *val = NULL;
     PurpleNotifyUserInfo *user_info = purple_notify_user_info_new();
 
     if (pkt->status == MRIM_ANKETA_INFO_STATUS_OK && pkt->users) {
@@ -2269,7 +2240,7 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
             }
             g_hash_table_replace(md->contacts, contact->email, contact);
             if (is_chat_email(contact->email)) {
-                if (chat = mrim_find_blist_chat(md->account, contact->email)) {
+                if ((chat = mrim_find_blist_chat(md->account, contact->email))) {
                     purple_blist_alias_chat(chat, contact->nick);
                 }
                 else {
@@ -2282,7 +2253,7 @@ _dispatch_contact_list(MrimData *md, MrimPktContactList *pkt)
             }
             else {
                 // we preserve libpurple's contacts, but overwrites groups from server
-                if (buddy = purple_find_buddy(md->account, contact->email)) {
+                if ((buddy = purple_find_buddy(md->account, contact->email))) {
                     purple_blist_alias_buddy(buddy, contact->nick);
                 }
                 else {
@@ -2416,7 +2387,7 @@ mrim_list_emblem(PurpleBuddy *buddy)
 {
     MrimContact *contact = NULL;
     
-    if (contact = _mrim_contact_from_buddy(buddy)) {
+    if ((contact = _mrim_contact_from_buddy(buddy))) {
         if (contact->server_flags & CONTACT_INTFLAG_NOT_AUTHORIZED) {
             return "not-authorized";
         }
@@ -2468,7 +2439,7 @@ mrim_blist_node_menu(PurpleBlistNode *node)
     MrimAuthParams *params = NULL;
 
     if (PURPLE_BLIST_NODE_IS_BUDDY(node)) {
-        if (contact = _mrim_contact_from_buddy(PURPLE_BUDDY(node))) {
+        if ((contact = _mrim_contact_from_buddy(PURPLE_BUDDY(node)))) {
             if (contact->server_flags & CONTACT_INTFLAG_NOT_AUTHORIZED) {
                 md = _mrim_data_from_buddy(PURPLE_BUDDY(node));
                 params = _mrim_auth_params_new(md, contact->email);

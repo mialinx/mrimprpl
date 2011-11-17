@@ -3,12 +3,12 @@
 
 #include "mrim.h"
 
-#define MRIMPRPL_ID "prpl-mialinx-mrim"
-#define MRIMPRPL_NAME "Mail.Ru Agent"
-#define MRIMPRPL_VERSION "0.1"
-#define MRIMPRPL_AUTHOR "Dmitry Smal <mialinx@gmail.com>"
-#define MRIMPRPL_WEBSITE ""
-#define MRIMPRPL_SUMMARY "Mail.Ru agent protocol support plugin"
+#define MRIMPRPL_ID          PACKAGE_NAME
+#define MRIMPRPL_NAME        "Mail.Ru Agent"
+#define MRIMPRPL_VERSION     PACKAGE_VERSION
+#define MRIMPRPL_AUTHOR      PACKAGE_BUGREPORT
+#define MRIMPRPL_WEBSITE     "https://github.com/mialinx/mrimprpl"
+#define MRIMPRPL_SUMMARY     "Mail.Ru agent protocol support plugin"
 #define MRIMPRPL_DESCRIPTION MRIMPRPL_SUMMARY
 
 static PurplePluginProtocolInfo protocol_info = {
@@ -128,18 +128,12 @@ static void
 init_plugin(PurplePlugin *plugin)
 {                                  
     PurpleAccountOption *option;
-    PurpleAccountUserSplit *split;
 
     option = purple_account_option_string_new("Balancer host", "balancer_host", MRIMPRPL_BALANCER_DEFAULT_HOST);
     protocol_info.protocol_options = g_list_append(protocol_info.protocol_options, option);
 
     option = purple_account_option_int_new("Balancer port", "balancer_port", MRIMPRPL_BALANCER_DEFAULT_PORT);
     protocol_info.protocol_options = g_list_append(protocol_info.protocol_options, option);
-
-    /*
-    option = purple_account_option_bool_new("Notify about Emails", "notify_emails", FALSE);
-    protocol_info.protocol_options = g_list_append(protocol_info.protocol_options, option);
-    */
 }
 
 PURPLE_INIT_PLUGIN(mrimprpl, init_plugin, info)
