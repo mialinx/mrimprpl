@@ -1046,7 +1046,8 @@ _parse_offline_message_ack(MrimPktHeader *pkt)
                         gchar *oldlocale = setlocale(LC_TIME, NULL);
                         struct tm tm;
                         setlocale(LC_TIME, "C");
-                        strptime(date, "%a, %d %b %Y %H:%M:%S", &tm);
+                        //Sat, 07 Jan 2012 19:23:21 +0400
+                        strptime(date, "%a, %d %b %Y %H:%M:%S %z", &tm);
                         setlocale(LC_TIME, oldlocale);
                         loc->time = mktime(&tm);
                         g_free(date);

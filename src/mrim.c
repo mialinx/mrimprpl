@@ -54,6 +54,12 @@ is_temp_chat_email(const char *email)
     return email && g_str_has_suffix(email, "@temporary");
 }
 
+static gboolean
+is_useless_msg(const char *message)
+{
+    return !message || !strlen(message) || !strcmp(message, " "); 
+}
+
 /**************************************************/
 /************* CONTACT LIST ***********************/
 /**************************************************/
@@ -1442,7 +1448,7 @@ mrim_chat_send(PurpleConnection *gc, gint id, const gchar *message, PurpleMessag
 /**************************************************/
 
 static void
-_dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *message)
+_dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *message, time_t timestamp)
 {
     PurpleConversation *conv = NULL;
     gchar *clean = NULL, *who_part = NULL, *msg_part = NULL, *delim = NULL;
@@ -1461,7 +1467,7 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
         msg_part = clean;
     }
 
-    if (flags & MESSAGE_FLAG_NOTIFY) {
+    if ((flags & MESSAGE_FLAG_NOTIFY) && is_useless_msg(message)) {
         // chats does not support typing, just ignore
     }
     else if (!g_hash_table_lookup(md->contacts, from)) {
@@ -1477,7 +1483,7 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
     }
     else {
         conv = _mrim_chat_join(md, from);
-        purple_conv_chat_write(PURPLE_CONV_CHAT(conv), who_part, msg_part, PURPLE_MESSAGE_RECV, time(NULL));
+        purple_conv_chat_write(PURPLE_CONV_CHAT(conv), who_part, msg_part, PURPLE_MESSAGE_RECV, timestamp);
     }
 
     g_free(clean);
@@ -1580,7 +1586,7 @@ _chat_dispatch(MrimData *md, MrimPktMessageAck *pkt)
         }
     }
     else {
-        _dispatch_chat_message_ack(md, pkt->flags, pkt->from, pkt->message);
+        _dispatch_chat_message_ack(md, pkt->flags, pkt->from, pkt->message, time(NULL));
     }
 }
 
@@ -1631,7 +1637,7 @@ _dispatch_login_rej(MrimData *md, MrimPktLoginRej *pkt)
 }
 
 static void
-_dispatch_normal_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *message)
+_dispatch_normal_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *message, time_t timestamp)
 {
     PurpleConversation *conv = NULL;
     MrimContact *contact = NULL;
@@ -1640,7 +1646,7 @@ _dispatch_normal_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *me
 
     purple_debug_info("mrim", "message from %s flags 0x%08x\n", from, (guint) flags);
 
-    if (flags & MESSAGE_FLAG_NOTIFY) {
+    if ((flags & MESSAGE_FLAG_NOTIFY) && is_useless_msg(message)) {
         conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, from, md->account);
         if (!conv) {
             return;
@@ -1663,7 +1669,7 @@ _dispatch_normal_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *me
         }
         purple_conversation_set_name(conv, from);
         clean = purple_markup_escape_text(message, -1);
-        purple_conv_im_write(PURPLE_CONV_IM(conv), from, clean, PURPLE_MESSAGE_RECV, time(NULL));
+        purple_conv_im_write(PURPLE_CONV_IM(conv), from, clean, PURPLE_MESSAGE_RECV, timestamp);
         g_free(clean);
     }
 }
@@ -1675,7 +1681,7 @@ _dispatch_message_ack(MrimData *md, MrimPktMessageAck *pkt)
         _chat_dispatch(md, pkt);
     }
     else {
-        _dispatch_normal_message_ack(md, pkt->flags, pkt->from, pkt->message);
+        _dispatch_normal_message_ack(md, pkt->flags, pkt->from, pkt->message, time(NULL));
     }
     if (!(pkt->flags & MESSAGE_FLAG_NORECV)) {
         mrim_pkt_build_message_recv(md, pkt->from, pkt->msg_id);
@@ -2031,11 +2037,10 @@ static void
 _dispatch_offline_message_ack(MrimData *md, MrimPktOfflineMessageAck* pkt)
 {
     if (is_chat_email(pkt->from)) {
-        // TODO: does chats supports offline messages ?
-        _dispatch_chat_message_ack(md, pkt->flags, pkt->from, pkt->message);
+        _dispatch_chat_message_ack(md, pkt->flags, pkt->from, pkt->message, pkt->time);
     }
     else {
-        _dispatch_normal_message_ack(md, pkt->flags, pkt->from, pkt->message);
+        _dispatch_normal_message_ack(md, pkt->flags, pkt->from, pkt->message, pkt->time);
     }
 
     /* offline messages should be accepted despite NORECV flag */
