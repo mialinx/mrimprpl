@@ -60,6 +60,17 @@ is_useless_msg(const char *message)
     return !message || !strlen(message) || !strcmp(message, " "); 
 }
 
+static char*
+prepare_message(const char *message)
+{
+    char *m1 = purple_markup_escape_text(message, -1);
+    char *m2 = purple_strreplace(m1, "\r\n", "<br/>");
+    char *m3 = purple_strreplace(m2, "\n", "<br/>");
+    g_free(m1);
+    g_free(m2);
+    return m3;
+}
+
 /**************************************************/
 /************* CONTACT LIST ***********************/
 /**************************************************/
@@ -1455,17 +1466,17 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
 
     purple_debug_info("mrim", "chat message from %s flags 0x%08x\n == \n%s\n == \n", from, (guint) flags, message);
 
-    clean = purple_markup_escape_text(message, -1);
-    delim = g_strstr_len(clean, -1, ":\r\n");
+    delim = g_strstr_len(message, -1, ":\r\n");
     if (delim) {
         *delim = '\0';
-        who_part = clean;
+        who_part = message;
         msg_part = delim + 3;
     }
     else {
         who_part = from;
-        msg_part = clean;
+        msg_part = message;
     }
+    clean = prepare_message(msg_part);
 
     if ((flags & MESSAGE_FLAG_NOTIFY) && is_useless_msg(message)) {
         // chats does not support typing, just ignore
@@ -1483,7 +1494,7 @@ _dispatch_chat_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *mess
     }
     else {
         conv = _mrim_chat_join(md, from);
-        purple_conv_chat_write(PURPLE_CONV_CHAT(conv), who_part, msg_part, PURPLE_MESSAGE_RECV, timestamp);
+        purple_conv_chat_write(PURPLE_CONV_CHAT(conv), who_part, clean, PURPLE_MESSAGE_RECV, timestamp);
     }
 
     g_free(clean);
@@ -1668,7 +1679,7 @@ _dispatch_normal_message_ack(MrimData *md, guint32 flags, gchar *from, gchar *me
             conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, md->account, from);
         }
         purple_conversation_set_name(conv, from);
-        clean = purple_markup_escape_text(message, -1);
+        clean = prepare_message(message);
         purple_conv_im_write(PURPLE_CONV_IM(conv), from, clean, PURPLE_MESSAGE_RECV, timestamp);
         g_free(clean);
     }
