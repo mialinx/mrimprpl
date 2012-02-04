@@ -1,0 +1,310 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR Free Software Foundation, Inc.
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: mrimprpl 1.2\n"
+"Report-Msgid-Bugs-To: mialinx@gmail.com\n"
+"POT-Creation-Date: 2012-02-04 22:48+0400\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/mrim.c:557 src/mrim.c:616
+msgid "Server connection was lost"
+msgstr ""
+
+#: src/mrim.c:575 src/mrim.c:659 src/mrim.c:698
+msgid "Failed to connect to server"
+msgstr ""
+
+#: src/mrim.c:643
+#, c-format
+msgid "Failed to connect to server: %s\n"
+msgstr ""
+
+#: src/mrim.c:710
+#, c-format
+msgid "Unable to connect to balancer %s"
+msgstr ""
+
+#: src/mrim.c:726
+msgid "Unable to connect to balancer"
+msgstr ""
+
+#: src/mrim.c:755
+msgid "Unable to connect to balancer host"
+msgstr ""
+
+#: src/mrim.c:1016
+#, c-format
+msgid "Request was sent to %s"
+msgstr ""
+
+#: src/mrim.c:1018 src/mrim.c:2073
+msgid "Authorization"
+msgstr ""
+
+#: src/mrim.c:1625 src/mrim.c:1799
+msgid "failed to start ping"
+msgstr ""
+
+#: src/mrim.c:1708
+msgid "Message delivered"
+msgstr ""
+
+#: src/mrim.c:1711 src/mrim.c:1833
+msgid "Internal error"
+msgstr ""
+
+#: src/mrim.c:1714 src/mrim.c:1836
+msgid "No such user"
+msgstr ""
+
+#: src/mrim.c:1717
+msgid "Offline message limit exceeded"
+msgstr ""
+
+#: src/mrim.c:1720
+msgid "Message is too large"
+msgstr ""
+
+#: src/mrim.c:1723
+msgid "User disabled offline messages"
+msgstr ""
+
+#: src/mrim.c:1726 src/mrim.c:1848
+msgid "Unknown error"
+msgstr ""
+
+#: src/mrim.c:1776
+msgid "Sending message"
+msgstr ""
+
+#: src/mrim.c:1777
+msgid "Failed to send message"
+msgstr ""
+
+#: src/mrim.c:1827
+msgid "Operation succeded"
+msgstr ""
+
+#: src/mrim.c:1830
+msgid "Incorrect data"
+msgstr ""
+
+#: src/mrim.c:1839
+msgid "Incorrect user name"
+msgstr ""
+
+#: src/mrim.c:1842
+msgid "User already exists"
+msgstr ""
+
+#: src/mrim.c:1845
+msgid "Limit of groups exceeded"
+msgstr ""
+
+#: src/mrim.c:1884
+msgid "Adding group"
+msgstr ""
+
+#: src/mrim.c:1885
+msgid "Failed to create group on server"
+msgstr ""
+
+#: src/mrim.c:1903
+msgid "Adding user"
+msgstr ""
+
+#: src/mrim.c:1904
+msgid "Failed to create user on server"
+msgstr ""
+
+#: src/mrim.c:1922 src/mrim.c:1938
+msgid "Creating chat"
+msgstr ""
+
+#: src/mrim.c:1923 src/mrim.c:1939
+msgid "Failed to create chat contact on server"
+msgstr ""
+
+#: src/mrim.c:1970
+msgid "Removing group"
+msgstr ""
+
+#: src/mrim.c:1971
+msgid "Failed to remove group on server"
+msgstr ""
+
+#: src/mrim.c:1980
+msgid "Modifing group"
+msgstr ""
+
+#: src/mrim.c:1981
+msgid "Failed to modify group on server"
+msgstr ""
+
+#: src/mrim.c:1991
+msgid "Removing user"
+msgstr ""
+
+#: src/mrim.c:1992
+msgid "Failed to remove user on server"
+msgstr ""
+
+#: src/mrim.c:2002
+msgid "Moving user"
+msgstr ""
+
+#: src/mrim.c:2003
+msgid "Failed to move user on server"
+msgstr ""
+
+#: src/mrim.c:2012
+msgid "Renaming user"
+msgstr ""
+
+#: src/mrim.c:2013
+msgid "Failed to rename user on server"
+msgstr ""
+
+#: src/mrim.c:2022
+msgid "Leaving chat"
+msgstr ""
+
+#: src/mrim.c:2023
+msgid "Failed to remove chat on server"
+msgstr ""
+
+#: src/mrim.c:2033
+msgid "Renaming chat"
+msgstr ""
+
+#: src/mrim.c:2034
+msgid "Failed to rename chat on server"
+msgstr ""
+
+#: src/mrim.c:2072
+#, c-format
+msgid "You were authorized by %s"
+msgstr ""
+
+#: src/mrim.c:2104
+msgid "Another host logged in with the same email"
+msgstr ""
+
+#: src/mrim.c:2123
+msgid "MyWorld"
+msgstr ""
+
+#: src/mrim.c:2124
+msgid "Blog"
+msgstr ""
+
+#: src/mrim.c:2132
+msgid "Nick"
+msgstr ""
+
+#: src/mrim.c:2135
+msgid "First Name"
+msgstr ""
+
+#: src/mrim.c:2138
+msgid "Last Name"
+msgstr ""
+
+#: src/mrim.c:2141
+msgid "Male"
+msgstr ""
+
+#: src/mrim.c:2142
+msgid "Female"
+msgstr ""
+
+#: src/mrim.c:2143
+msgid "Unknown"
+msgstr ""
+
+#: src/mrim.c:2144
+msgid "Sex"
+msgstr ""
+
+#: src/mrim.c:2147
+msgid "Birthday"
+msgstr ""
+
+#: src/mrim.c:2150
+msgid "Phone"
+msgstr ""
+
+#: src/mrim.c:2154
+msgid "The Ram"
+msgstr ""
+
+#: src/mrim.c:2154
+msgid "The Bull"
+msgstr ""
+
+#: src/mrim.c:2154
+msgid "The Twins"
+msgstr ""
+
+#: src/mrim.c:2154
+msgid "The Crab"
+msgstr ""
+
+#: src/mrim.c:2155
+msgid "The Lion"
+msgstr ""
+
+#: src/mrim.c:2155
+msgid "The Virgin"
+msgstr ""
+
+#: src/mrim.c:2155
+msgid "The Scales"
+msgstr ""
+
+#: src/mrim.c:2155
+msgid "The Scorpion"
+msgstr ""
+
+#: src/mrim.c:2156
+msgid "The Archer"
+msgstr ""
+
+#: src/mrim.c:2156
+msgid "The Sea-Goat"
+msgstr ""
+
+#: src/mrim.c:2156
+msgid "The Water Bearer"
+msgstr ""
+
+#: src/mrim.c:2156
+msgid "The Fish"
+msgstr ""
+
+#: src/mrim.c:2160
+msgid "Zodiac"
+msgstr ""
+
+#: src/mrim.c:2164
+msgid "Location"
+msgstr ""
+
+#: src/mrim.c:2168
+msgid "Failed to load contact info"
+msgstr ""
+
+#: src/mrim.c:2469
+msgid "Request authorization"
+msgstr ""

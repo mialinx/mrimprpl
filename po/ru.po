@@ -1,0 +1,311 @@
+# Russian translations for mrimprpl package.
+# Copyright (C) 2012 Free Software Foundation, Inc.
+# This file is distributed under the same license as the mrimprpl package.
+# Dmitry Smal <mialinx@gmail.com>, 2012.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: mrimprpl 1.2\n"
+"Report-Msgid-Bugs-To: mialinx@gmail.com\n"
+"POT-Creation-Date: 2012-02-04 22:48+0400\n"
+"PO-Revision-Date: 2012-02-04 23:02+0400\n"
+"Last-Translator: Dmitry Smal <mialinx@gmail.com>\n"
+"Language-Team: Russian <ru@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n"
+"%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: src/mrim.c:557 src/mrim.c:616
+msgid "Server connection was lost"
+msgstr "Потеряно соединение с сервером"
+
+#: src/mrim.c:575 src/mrim.c:659 src/mrim.c:698
+msgid "Failed to connect to server"
+msgstr "Не удалось подключиться к серверу"
+
+#: src/mrim.c:643
+#, c-format
+msgid "Failed to connect to server: %s\n"
+msgstr "Не удалось подключиться к серверу: %s\n"
+
+#: src/mrim.c:710
+#, c-format
+msgid "Unable to connect to balancer %s"
+msgstr "Не удалось подключиться к балансировщику %s"
+
+#: src/mrim.c:726
+msgid "Unable to connect to balancer"
+msgstr "Не удалось подключиться к балансировщику"
+
+#: src/mrim.c:755
+msgid "Unable to connect to balancer host"
+msgstr "Не удалось подключиться к балансировщику"
+
+#: src/mrim.c:1016
+#, c-format
+msgid "Request was sent to %s"
+msgstr "Запрос %s был отправлен"
+
+#: src/mrim.c:1018 src/mrim.c:2073
+msgid "Authorization"
+msgstr "Авторизация"
+
+#: src/mrim.c:1625 src/mrim.c:1799
+msgid "failed to start ping"
+msgstr "не удалось послать пинг"
+
+#: src/mrim.c:1708
+msgid "Message delivered"
+msgstr "Сообщение доставлено"
+
+#: src/mrim.c:1711 src/mrim.c:1833
+msgid "Internal error"
+msgstr "Внутренняя ошибка"
+
+#: src/mrim.c:1714 src/mrim.c:1836
+msgid "No such user"
+msgstr "Нет такого пользователя"
+
+#: src/mrim.c:1717
+msgid "Offline message limit exceeded"
+msgstr "Превышено число оффлайн сообщений"
+
+#: src/mrim.c:1720
+msgid "Message is too large"
+msgstr "Сообщение слишком большое"
+
+#: src/mrim.c:1723
+msgid "User disabled offline messages"
+msgstr "Пользователь отключил оффлайн сообщеия"
+
+#: src/mrim.c:1726 src/mrim.c:1848
+msgid "Unknown error"
+msgstr "Неизвестная ошибка"
+
+#: src/mrim.c:1776
+msgid "Sending message"
+msgstr "Отправка сообщения"
+
+#: src/mrim.c:1777
+msgid "Failed to send message"
+msgstr "Не удалось отправить сообщение"
+
+#: src/mrim.c:1827
+msgid "Operation succeded"
+msgstr "Операция удалась"
+
+#: src/mrim.c:1830
+msgid "Incorrect data"
+msgstr "Неверные данные"
+
+#: src/mrim.c:1839
+msgid "Incorrect user name"
+msgstr "Неверное имя пользователя"
+
+#: src/mrim.c:1842
+msgid "User already exists"
+msgstr "Пользователь уже существует"
+
+#: src/mrim.c:1845
+msgid "Limit of groups exceeded"
+msgstr "Превышено возможное число групп"
+
+#: src/mrim.c:1884
+msgid "Adding group"
+msgstr "Добавление группы"
+
+#: src/mrim.c:1885
+msgid "Failed to create group on server"
+msgstr "Не удалось создать группу на сервере"
+
+#: src/mrim.c:1903
+msgid "Adding user"
+msgstr "Добавление пользователя"
+
+#: src/mrim.c:1904
+msgid "Failed to create user on server"
+msgstr "Не удалось создать пользователя на сервере"
+
+#: src/mrim.c:1922 src/mrim.c:1938
+msgid "Creating chat"
+msgstr "Создание чата"
+
+#: src/mrim.c:1923 src/mrim.c:1939
+msgid "Failed to create chat contact on server"
+msgstr "Не удалось создать чат на сервере"
+
+#: src/mrim.c:1970
+msgid "Removing group"
+msgstr "Удаление группы"
+
+#: src/mrim.c:1971
+msgid "Failed to remove group on server"
+msgstr "Не удалось удалить группу на сервере"
+
+#: src/mrim.c:1980
+msgid "Modifing group"
+msgstr "Изменение группы"
+
+#: src/mrim.c:1981
+msgid "Failed to modify group on server"
+msgstr "Не удалось изменить группу на сервере"
+
+#: src/mrim.c:1991
+msgid "Removing user"
+msgstr "Удаление контакта"
+
+#: src/mrim.c:1992
+msgid "Failed to remove user on server"
+msgstr "Не удалось удалить контакт на сервере"
+
+#: src/mrim.c:2002
+msgid "Moving user"
+msgstr "Переменещение контакта"
+
+#: src/mrim.c:2003
+msgid "Failed to move user on server"
+msgstr "Не удалось переместить контакт на сервере"
+
+#: src/mrim.c:2012
+msgid "Renaming user"
+msgstr "Переименование контакта"
+
+#: src/mrim.c:2013
+msgid "Failed to rename user on server"
+msgstr "Не удалось переименовать контакт на сервере"
+
+#: src/mrim.c:2022
+msgid "Leaving chat"
+msgstr "Отключение от чата"
+
+#: src/mrim.c:2023
+msgid "Failed to remove chat on server"
+msgstr "Не удалось удалить чат на сервере"
+
+#: src/mrim.c:2033
+msgid "Renaming chat"
+msgstr "Переименование чата"
+
+#: src/mrim.c:2034
+msgid "Failed to rename chat on server"
+msgstr "Не удалось переименовать чат на сервере"
+
+#: src/mrim.c:2072
+#, c-format
+msgid "You were authorized by %s"
+msgstr "%s авторизовал вас"
+
+#: src/mrim.c:2104
+msgid "Another host logged in with the same email"
+msgstr "Другой компьютер подключился под этой учетной записью"
+
+#: src/mrim.c:2123
+msgid "MyWorld"
+msgstr "Мой Мир"
+
+#: src/mrim.c:2124
+msgid "Blog"
+msgstr "Блоги"
+
+#: src/mrim.c:2132
+msgid "Nick"
+msgstr "Ник"
+
+#: src/mrim.c:2135
+msgid "First Name"
+msgstr "Имя"
+
+#: src/mrim.c:2138
+msgid "Last Name"
+msgstr "Фамилия"
+
+#: src/mrim.c:2141
+msgid "Male"
+msgstr "Мужчина"
+
+#: src/mrim.c:2142
+msgid "Female"
+msgstr "Женщина"
+
+#: src/mrim.c:2143
+msgid "Unknown"
+msgstr "Неизвестно"
+
+#: src/mrim.c:2144
+msgid "Sex"
+msgstr "Пол"
+
+#: src/mrim.c:2147
+msgid "Birthday"
+msgstr "День рождения"
+
+#: src/mrim.c:2150
+msgid "Phone"
+msgstr "Телефон"
+
+#: src/mrim.c:2154
+msgid "The Ram"
+msgstr "Овен"
+
+#: src/mrim.c:2154
+msgid "The Bull"
+msgstr "Телец"
+
+#: src/mrim.c:2154
+msgid "The Twins"
+msgstr "Близнецы"
+
+#: src/mrim.c:2154
+msgid "The Crab"
+msgstr "Рак"
+
+#: src/mrim.c:2155
+msgid "The Lion"
+msgstr "Лев"
+
+#: src/mrim.c:2155
+msgid "The Virgin"
+msgstr "Дева"
+
+#: src/mrim.c:2155
+msgid "The Scales"
+msgstr "Весы"
+
+#: src/mrim.c:2155
+msgid "The Scorpion"
+msgstr "Скорпион"
+
+#: src/mrim.c:2156
+msgid "The Archer"
+msgstr "Стрелец"
+
+#: src/mrim.c:2156
+msgid "The Sea-Goat"
+msgstr "Козерог"
+
+#: src/mrim.c:2156
+msgid "The Water Bearer"
+msgstr "Водолей"
+
+#: src/mrim.c:2156
+msgid "The Fish"
+msgstr "Рыбы"
+
+#: src/mrim.c:2160
+msgid "Zodiac"
+msgstr "Знак зодиака"
+
+#: src/mrim.c:2164
+msgid "Location"
+msgstr "Местоположение"
+
+#: src/mrim.c:2168
+msgid "Failed to load contact info"
+msgstr "Не удалось загрузить информацию"
+
+#: src/mrim.c:2469
+msgid "Request authorization"
+msgstr "Запрос авторизации"

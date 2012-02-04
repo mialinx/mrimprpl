@@ -12,3 +12,5 @@ autom4te.cache/*
 *.o
 *.lo
 *.la
+stamp-po
+*.gmo

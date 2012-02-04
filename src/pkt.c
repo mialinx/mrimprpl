@@ -4,6 +4,7 @@
 #include <locale.h>
 #include <time.h>
 #include "pkt.h"
+#include "nls.h"
 
 /* Common utils */
 

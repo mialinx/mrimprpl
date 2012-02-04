@@ -1,7 +1,9 @@
+#include "config.h"
 #include <glib.h>
 #include <purple.h>
 
 #include "mrim.h"
+#include "nls.h"
 
 #define MRIMPRPL_ID          PACKAGE_NAME
 #define MRIMPRPL_NAME        "Mail.Ru Agent"
@@ -129,10 +131,10 @@ init_plugin(PurplePlugin *plugin)
 {                                  
     PurpleAccountOption *option;
 
-    option = purple_account_option_string_new("Balancer host", "balancer_host", MRIMPRPL_BALANCER_DEFAULT_HOST);
+    option = purple_account_option_string_new(__("Balancer host"), "balancer_host", MRIMPRPL_BALANCER_DEFAULT_HOST);
     protocol_info.protocol_options = g_list_append(protocol_info.protocol_options, option);
 
-    option = purple_account_option_int_new("Balancer port", "balancer_port", MRIMPRPL_BALANCER_DEFAULT_PORT);
+    option = purple_account_option_int_new(__("Balancer port"), "balancer_port", MRIMPRPL_BALANCER_DEFAULT_PORT);
     protocol_info.protocol_options = g_list_append(protocol_info.protocol_options, option);
 }
 

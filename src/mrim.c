@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include "mrim.h"
 #include "pkt.h"
+#include "nls.h"
 
 #define MRIM_MAX_MESSAGE_LEN (8 * 1024 * 1024)
 #define MRIM_TYPING_TIMEOUT 10
@@ -554,7 +555,7 @@ _canwrite_cb(gpointer data, gint source, PurpleInputCondition cond)
         else {
             purple_connection_error_reason(md->account->gc,
                 PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-                "Server connection was lost"
+                __("Server connection was lost")
             );
         }
     }
@@ -572,7 +573,7 @@ _send_out(MrimData *md)
         if (!md->server.write_handle) {
             purple_connection_error_reason(md->account->gc,
                 PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-                "Failed to connect to server"
+                __("Failed to connect to server")
             );
         }
     }
@@ -613,7 +614,7 @@ _canread_cb(gpointer data, gint source, PurpleInputCondition cond)
     {
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-            "Server connection was lost"
+            __("Server connection was lost")
         );
         purple_input_remove(md->server.read_handle);
         md->server.read_handle = 0;
@@ -640,7 +641,7 @@ _mrim_login_server_connected(gpointer data, gint source, const gchar *error_mess
 
     md->server.connect_data = NULL;
     if (source < 0) {
-        gchar *tmp = g_strdup_printf("Failed to connect to server: %s\n", error_message);
+        gchar *tmp = g_strdup_printf(__("Failed to connect to server: %s\n"), error_message);
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR, tmp
         );
@@ -656,7 +657,7 @@ _mrim_login_server_connected(gpointer data, gint source, const gchar *error_mess
     if (!md->server.read_handle) {
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-            "Failed to connect to server"
+            __("Failed to connect to server")
         );
         return;
     }
@@ -695,7 +696,7 @@ _mrim_login_balancer_answered(gpointer data, gint source, PurpleInputCondition c
     if (!md->server.connect_data) {
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-            "Failed to connect to server"
+            __("Failed to connect to server")
         );
         return;
     }
@@ -707,7 +708,7 @@ _mrim_login_balancer_connected(gpointer data, gint source, const gchar *error_me
 
     md->balancer.connect_data = NULL;
     if (source < 0) {
-        gchar *tmp = g_strdup_printf("Unable to connect to balancer %s", error_message);
+        gchar *tmp = g_strdup_printf(__("Unable to connect to balancer %s"), error_message);
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR, tmp);
         g_free(tmp);
@@ -723,7 +724,7 @@ _mrim_login_balancer_connected(gpointer data, gint source, const gchar *error_me
     if (!md->balancer.read_handle) {
         purple_connection_error_reason(md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-            "Unable to connect to balancer"
+            __("Unable to connect to balancer")
         );
         return;
     }
@@ -752,7 +753,7 @@ mrim_login(PurpleAccount *account)
     if (!md->balancer.connect_data) {
         purple_connection_error_reason(account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-            "Unable to connect to balancer host"
+            __("Unable to connect to balancer host")
         );
         return;
     }
@@ -1013,9 +1014,9 @@ _mrim_auth_params_free(MrimAuthParams *params)
 static void
 _mrim_request_authorization_dialog(MrimData *md, const gchar *email)
 {
-     gchar *msg = g_strdup_printf("Request was sent to %s", email);
+     gchar *msg = g_strdup_printf(__("Request was sent to %s"), email);
     _mrim_send_message(md, email, " ", MESSAGE_FLAG_AUTHORIZE);
-    purple_notify_info(md->account->gc, "Authorization", msg, NULL);
+    purple_notify_info(md->account->gc, __("Authorization"), msg, NULL);
     g_free(msg);
 }
 
@@ -1622,7 +1623,7 @@ _dispatch_hello_ack(MrimData *md, MrimPktHelloAck *pkt)
         purple_connection_error_reason(
             md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-            "failed to start ping"
+            __("failed to start ping")
         );
     }
 }
@@ -1705,25 +1706,25 @@ _message_delivery_reason(guint32 status)
 {
     switch (status) {
         case MESSAGE_DELIVERED:
-            return "Message delivered";
+            return __("Message delivered");
             break;
         case MESSAGE_REJECTED_INTERR:
-            return "Internal error";
+            return __("Internal error");
             break;
         case MESSAGE_REJECTED_NOUSER:
-            return "No such user";
+            return __("No such user");
             break;
         case MESSAGE_REJECTED_LIMIT_EXCEEDED:
-            return "Offline message limit exceeded";
+            return __("Offline message limit exceeded");
             break;
         case MESSAGE_REJECTED_TOO_LARGE:
-            return "Message is too large";
+            return __("Message is too large");
             break;
         case MESSAGE_REJECTED_DENY_OFFMSG:
-            return "User disabled offline messages";
+            return __("User disabled offline messages");
             break;
         default:
-            return "Unknown error";
+            return __("Unknown error");
             break;
     }
 }
@@ -1773,8 +1774,8 @@ _dispatch_message_status(MrimData *md, MrimPktMessageStatus *pkt)
         }
     }
     else {
-        purple_notify_error(md->account->gc, "Sending message", 
-                                    "Failed to send message", reason);
+        purple_notify_error(md->account->gc, __("Sending message"), 
+                                    __("Failed to send message"), reason);
     }
 
     g_hash_table_remove(md->attempts, (gpointer) pkt->header.seq);
@@ -1796,7 +1797,7 @@ _dispatch_connection_param(MrimData *md, MrimPktConnectionParams *pkt)
         purple_connection_error_reason(
             md->account->gc,
             PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-            "failed to start ping"
+            __("failed to start ping")
         );
     }
 }
@@ -1824,28 +1825,28 @@ _contact_operation_reason(guint32 status)
 {
     switch (status) {
         case CONTACT_OPER_SUCCESS:
-            return "Operation succeded";
+            return __("Operation succeded");
             break;
         case CONTACT_OPER_ERROR:
-            return "Incorrect data";
+            return __("Incorrect data");
             break;
         case CONTACT_OPER_INTERR:
-            return "Internal error";
+            return __("Internal error");
             break;
         case CONTACT_OPER_NO_SUCH_USER:
-            return "No such user";
+            return __("No such user");
             break;
         case CONTACT_OPER_INVALID_INFO:
-            return "Incorrect user name";
+            return __("Incorrect user name");
             break;
         case CONTACT_OPER_USER_EXISTS:
-            return "User already exists";
+            return __("User already exists");
             break;
         case CONTACT_OPER_GROUP_LIMIT:
-            return "Limit of groups exceeded";
+            return __("Limit of groups exceeded");
             break;
         default:
-            return "Unknown error";
+            return __("Unknown error");
             break;
     }
 }
@@ -1881,8 +1882,8 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
             _mrim_group_destroy(group);
         }
         else {
-            purple_notify_error(md->account->gc, "Adding group", 
-                                        "Failed to create group on server", reason);
+            purple_notify_error(md->account->gc, __("Adding group"),
+                                        __("Failed to create group on server"), reason);
             purple_blist_remove_group(purple_find_group(group->nick));
             _mrim_group_destroy(group);
         }
@@ -1900,8 +1901,8 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
             _mrim_contact_destroy(contact);
         }
         else {
-            purple_notify_error(md->account->gc, "Adding user", 
-                                        "Failed to create user on server", reason);
+            purple_notify_error(md->account->gc, __("Adding user"),
+                                        __("Failed to create user on server"), reason);
             purple_blist_remove_buddy(purple_find_buddy(md->account, contact->email));
             _mrim_contact_destroy(contact);
         }
@@ -1919,8 +1920,8 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
             _mrim_chat_join(md, contact->email);
         }
         else {
-            purple_notify_error(md->account->gc, "Creating chat", 
-                                        "Failed to create chat contact on server", reason);
+            purple_notify_error(md->account->gc, __("Creating chat"),
+                                        __("Failed to create chat contact on server"), reason);
             purple_blist_remove_chat(chat);
         }
     }
@@ -1935,8 +1936,8 @@ _dispatch_add_contact_ack(MrimData *md, MrimPktAddContactAck *pkt)
             _mrim_chat_join(md, contact->email);
         }
         else {
-            purple_notify_error(md->account->gc, "Creating chat", 
-                                        "Failed to create chat contact on server", reason);
+            purple_notify_error(md->account->gc, __("Creating chat"),
+                                        __("Failed to create chat contact on server"), reason);
             purple_blist_remove_chat(chat);
         }
     }
@@ -1967,8 +1968,8 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
             g_hash_table_remove(md->groups, atmp->remove_group.group->nick);
         }
         else {
-            purple_notify_error(md->account->gc, "Removing group", 
-                                        "Failed to remove group on server", reason);
+            purple_notify_error(md->account->gc, __("Removing group"),
+                                        __("Failed to remove group on server"), reason);
         }
     }
 
@@ -1977,8 +1978,8 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
             _mrim_group_rename(md, atmp->rename_group.group, atmp->rename_group.new_nick);
         }
         else {
-            purple_notify_error(md->account->gc, "Modifing group",
-                                        "Failed to modify group on server", reason);
+            purple_notify_error(md->account->gc, __("Modifing group"),
+                                        __("Failed to modify group on server"), reason);
             /* HOWTO rename group back ? */
         }
     }
@@ -1988,8 +1989,8 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
             g_hash_table_remove(md->contacts, atmp->remove_contact.contact->email);
         }
         else {
-            purple_notify_error(md->account->gc, "Removing user", 
-                                        "Failed to remove user on server", reason);
+            purple_notify_error(md->account->gc, __("Removing user"),
+                                        __("Failed to remove user on server"), reason);
             /* HOWTO undo deletion ? */
         }
     }
@@ -1999,8 +2000,8 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
             atmp->move_contact.contact->group_id = atmp->move_contact.group->id;
         }
         else {
-            purple_notify_error(md->account->gc, "Moving user",
-                                        "Failed to move user on server", reason);
+            purple_notify_error(md->account->gc, __("Moving user"),
+                                        __("Failed to move user on server"), reason);
         }
     }
 
@@ -2009,8 +2010,8 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
             _mrim_contact_set_nick(atmp->rename_contact.contact, atmp->rename_contact.new_nick);
         }
         else {
-            purple_notify_error(md->account->gc, "Renaming user",
-                                        "Failed to rename user on server", reason);
+            purple_notify_error(md->account->gc, __("Renaming user"),
+                                        __("Failed to rename user on server"), reason);
         }
     }
 
@@ -2019,8 +2020,8 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
             g_hash_table_remove(md->contacts, atmp->remove_chat.contact->email);
         }
         else {
-            purple_notify_error(md->account->gc, "Leaving chat",
-                                        "Failed to remove chat on server", reason);
+            purple_notify_error(md->account->gc, __("Leaving chat"),
+                                        __("Failed to remove chat on server"), reason);
             /* HOWTO undo deletion ? */
         }
     }
@@ -2030,8 +2031,8 @@ _dispatch_modify_contact_ack(MrimData *md, MrimPktModifyContactAck *pkt)
             _mrim_contact_set_nick(atmp->rename_contact.contact, atmp->rename_contact.new_nick);
         }
         else {
-            purple_notify_error(md->account->gc, "Renaming chat",
-                                        "Failed to rename chat on server", reason);
+            purple_notify_error(md->account->gc, __("Renaming chat"),
+                                        __("Failed to rename chat on server"), reason);
             /* HOWTO undo renaming ? */
         }
     }
@@ -2069,8 +2070,8 @@ _dispatch_authorize_ack(MrimData *md, MrimPktAuthorizeAck *pkt)
         contact->server_flags &= !CONTACT_INTFLAG_NOT_AUTHORIZED;
         purple_debug_info("mrim", "_dispatch_authorize_ack: you were authorized by %s\n", contact->email);
         if (!is_chat_email(contact->email)) {
-            msg = g_strdup_printf("You were authorized by %s", contact->email);
-            purple_notify_info(md->account->gc, "Authorization", msg, NULL);
+            msg = g_strdup_printf(__("You were authorized by %s"), contact->email);
+            purple_notify_info(md->account->gc, __("Authorization"), msg, NULL);
             g_free(msg);
         }
     }
@@ -2101,7 +2102,7 @@ _dispatch_logout(MrimData *md, MrimPktLogout *pkt)
 {
     purple_connection_error_reason(md->account->gc,
         PURPLE_CONNECTION_ERROR_OTHER_ERROR,
-        "Another host logged in with the same email"
+        __("Another host logged in with the same email")
     );
     purple_account_disconnect(md->account);
 }
@@ -2120,8 +2121,8 @@ _dispatch_contact_info(MrimData *md, gchar *email, MrimPktAnketaInfo *pkt)
         gchar **parts = g_strsplit(nd[1], ".", 2);
         gchar *myworld_url = g_strdup_printf("http://my.mail.ru/%s/%s/", parts[0], nd[0]);
         gchar *blog_url =  g_strdup_printf("http://blogs.mail.ru/%s/%s/", parts[0], nd[0]);
-        purple_notify_user_info_add_pair(user_info, "MyWorld", myworld_url);
-        purple_notify_user_info_add_pair(user_info, "Blog", blog_url);
+        purple_notify_user_info_add_pair(user_info, __("MyWorld"), myworld_url);
+        purple_notify_user_info_add_pair(user_info, __("Blog"), blog_url);
         g_free(blog_url);
         g_free(myworld_url);
         g_strfreev(parts);
@@ -2129,43 +2130,43 @@ _dispatch_contact_info(MrimData *md, gchar *email, MrimPktAnketaInfo *pkt)
 
         user = (GHashTable*) pkt->users->data;
         if ((val = g_hash_table_lookup(user, "Nickname")) && strlen(val)) {
-            purple_notify_user_info_add_pair(user_info, "Nick", val);
+            purple_notify_user_info_add_pair(user_info, __("Nick"), val);
         }
         if ((val = g_hash_table_lookup(user, "FirstName")) && strlen(val)) {
-            purple_notify_user_info_add_pair(user_info, "First Name", val);
+            purple_notify_user_info_add_pair(user_info, __("First Name"), val);
         }
         if ((val = g_hash_table_lookup(user, "LastName")) && strlen(val)) {
-            purple_notify_user_info_add_pair(user_info, "Last Name", val);
+            purple_notify_user_info_add_pair(user_info, __("Last Name"), val);
         }
         if ((val = g_hash_table_lookup(user, "Sex")) && strlen(val)) {
-            const gchar *sex = atol(val) == 1 ? "Male" : 
-                               atol(val) == 2 ? "Female" :
-                               "Unknown";
-            purple_notify_user_info_add_pair(user_info, "Sex", sex);
+            const gchar *sex = atol(val) == 1 ? __("Male") : 
+                               atol(val) == 2 ? __("Female") :
+                               __("Unknown");
+            purple_notify_user_info_add_pair(user_info, __("Sex"), sex);
         }
         if ((val = g_hash_table_lookup(user, "Birthday")) && strlen(val)) {
-            purple_notify_user_info_add_pair(user_info, "Birthday", val);
+            purple_notify_user_info_add_pair(user_info, __("Birthday"), val);
         }
         if ((val = g_hash_table_lookup(user, "Phone")) && strlen(val)) {
-            purple_notify_user_info_add_pair(user_info, "Phone", val);
+            purple_notify_user_info_add_pair(user_info, __("Phone"), val);
         }
         if ((val = g_hash_table_lookup(user, "Zodiac")) && strlen(val)) {
-            const gchar* zodiac[] = {
-                "The Ram", "The Bull", "The Twins", "The Crab", 
-                "The Lion", "The Virgin", "The Scales", "The Scorpion", 
-                "The Archer", "The Sea-Goat", "The Water Bearer", "The Fish"
+            gchar* zodiac[] = {
+                __("The Ram"), __("The Bull"), __("The Twins"), __("The Crab"), 
+                __("The Lion"), __("The Virgin"), __("The Scales"), __("The Scorpion"), 
+                __("The Archer"), __("The Sea-Goat"), __("The Water Bearer"), __("The Fish")
             };
             guint32 idx = (guint32) atoi(val);
             if (idx > 0 && idx < sizeof(zodiac) / sizeof(gchar*) + 1) {
-                purple_notify_user_info_add_pair(user_info, "Zodiac", zodiac[idx - 1]);
+                purple_notify_user_info_add_pair(user_info, __("Zodiac"), zodiac[idx - 1]);
             }
         }
         if ((val = g_hash_table_lookup(user, "Location")) && strlen(val)) {
-            purple_notify_user_info_add_pair(user_info, "Location", val);
+            purple_notify_user_info_add_pair(user_info, __("Location"), val);
         }
     }
     else {
-        purple_notify_user_info_add_pair(user_info, NULL, "Failed to load contact info");
+        purple_notify_user_info_add_pair(user_info, NULL, __("Failed to load contact info"));
         purple_debug_error("mrim", "Failed to load contact info for %s\n", email);
     }
     
@@ -2466,7 +2467,7 @@ mrim_blist_node_menu(PurpleBlistNode *node)
             if (contact->server_flags & CONTACT_INTFLAG_NOT_AUTHORIZED) {
                 md = _mrim_data_from_buddy(PURPLE_BUDDY(node));
                 params = _mrim_auth_params_new(md, contact->email);
-                action = purple_menu_action_new("Request authorization", 
+                action = purple_menu_action_new(__("Request authorization"), 
                     G_CALLBACK(_mrim_request_authorization_menu_cb), params, NULL);
                 list = g_list_append(list, action);
             }
