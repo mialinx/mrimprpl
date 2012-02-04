@@ -15,6 +15,8 @@ AC_PROG_CC
 AC_PROG_LIBTOOL
 
 # Checks for libraries.
+AM_GNU_GETTEXT([external])
+AM_GNU_GETTEXT_VERSION([0.18])
 
 # Check for modules
 PKG_CHECK_MODULES(GLIB, [glib-2.0 >= 2.4.0], , [
@@ -45,4 +47,4 @@ AC_ARG_ENABLE([mrim-avatars], [
 ])
 
 # Checks for library functions.
-AC_OUTPUT([Makefile src/Makefile img/Makefile])
+AC_OUTPUT([Makefile src/Makefile img/Makefile po/Makefile.in])
