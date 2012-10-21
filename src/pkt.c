@@ -400,6 +400,10 @@ mrim_pkt_build_chat_get_members(MrimData *md, guint32 flags, const gchar* email)
     _init_header(&header, ++md->tx_seq, MRIM_CS_MESSAGE, sizeof(flags) + LPS_LEN(lps_to)
         + LPS_LEN(lps_message) + LPS_LEN(lps_rtf_message) + LPS_LEN(lps_chat));
 
+    // I know this is ugly, but this f**king server doesn't want to create chats
+    // It starts chat support from 0x14 minor version
+    header.proto = PROTO_MAKE_VERSION(PROTO_VERSION_MAJOR, 0x14);
+
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
     purple_circ_buffer_append(md->server.tx_buf, &flags, sizeof(flags));
     purple_circ_buffer_append(md->server.tx_buf, lps_to, LPS_LEN(lps_to));
