@@ -19,6 +19,8 @@
 #define MRIM_AVATAR_DELAY     2000
 #define MRIM_EMAIL_BUF_LEN 1024
 #define BIG_NUM 0xF0000000  // number big enougth, to prevent tx_seq to reach it
+#define PING_TIMEOUT 30
+#define PINGBACK_TIMEOUT 30
 
 
 /**************************************************/
@@ -590,6 +592,28 @@ _mrim_ping(gpointer data)
     return TRUE;
 }
 
+static gboolean
+_mrim_pingback(gpointer data)
+{
+    MrimData *md = (MrimData *) data;
+    time_t now = time(NULL);
+
+    if (now - md->last_pinged > 2 * PINGBACK_TIMEOUT) {
+        purple_debug_error("mrim", "server didn't ping us. now=%d last_ping=%d pingback_timeout=%d\n", 
+                            (int) now, (int) md->last_pinged, PINGBACK_TIMEOUT);
+        purple_connection_error_reason(md->account->gc,
+            PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
+            __("Server didn't ping us")
+        );
+    }
+    else {
+        purple_debug_info("mrim", "server pinged us. now=%d last_ping=%d pingback_timeout=%d\n", 
+                            (int) now, (int) md->last_pinged, PINGBACK_TIMEOUT);
+    }
+
+    return TRUE;
+}
+
 static void
 _dispatch(MrimData *md, MrimPktHeader *pkt);
 
@@ -662,7 +686,7 @@ _mrim_login_server_connected(gpointer data, gint source, const gchar *error_mess
         return;
     }
 
-    mrim_pkt_build_hello(md);
+    mrim_pkt_build_hello(md, PING_TIMEOUT, PINGBACK_TIMEOUT);
     _send_out(md);
 }
 
@@ -763,8 +787,9 @@ mrim_login(PurpleAccount *account)
     md->server.rx_pkt_buf = g_string_sized_new(MRIM_LINR_BUFFER_INIT);
   
     md->tx_seq = 0;
-    md->keepalive = 0;
-    md->keepalive_handle =0;
+    md->ping_timeout = 0;
+    md->ping_handle =0;
+    md->pingback_handle =0;
     md->attempts = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _mrim_attempt_free);
     md->groups = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, _mrim_group_free);
     md->contacts = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, _mrim_contact_free);
@@ -834,11 +859,16 @@ mrim_close(PurpleConnection *gc)
 
     /* reset tx sequence number */
     md->tx_seq = 0;
-    if (md->keepalive_handle) {
-        purple_timeout_remove(md->keepalive_handle);
-        md->keepalive_handle = 0;
+    if (md->ping_handle) {
+        purple_timeout_remove(md->ping_handle);
+        md->ping_handle = 0;
     }
-    md->keepalive = 0;
+    md->ping_timeout = 0;
+    if (md->pingback_handle) {
+        purple_timeout_remove(md->pingback_handle);
+        md->pingback_handle = 0;
+    }
+    md->last_pinged = (time_t) 0;
     g_hash_table_destroy(md->groups);
     md->groups = NULL;
     g_hash_table_destroy(md->contacts);
@@ -1605,27 +1635,37 @@ _chat_dispatch(MrimData *md, MrimPktMessageAck *pkt)
 static void
 _dispatch_hello_ack(MrimData *md, MrimPktHelloAck *pkt)
 {
-    const char *login, *pass, *agent;
+    const char *login, *pass, *agent, *lang, *client_descr;
 
-    md->keepalive = pkt->timeout;
+    md->ping_timeout = pkt->timeout;
 
-    purple_debug_info("mrim", "keepalive is %u\n", md->keepalive);
+    purple_debug_info("mrim", "ping_timeout is %u\n", md->ping_timeout);
 
     login = purple_account_get_username(md->account);
     pass = purple_account_get_password(md->account);
-    agent = "Mail.ru pidgin plugin v0.01";
+    agent = "client=\"" MRIMPRPL_ID "\" version=\"" MRIMPRPL_VERSION "\" build=\"1\"";
+    lang = "ru";
+    client_descr = MRIMPRPL_ID " " MRIMPRPL_VERSION;
 
-    mrim_pkt_build_login(md, login, pass, STATUS_ONLINE, agent);
+    mrim_pkt_build_login2(md, login, pass, STATUS_ONLINE, "", "",  
+        FEATURE_FLAG_BASE_SMILES|FEATURE_FLAG_MULTS, agent, lang, 
+        "", "", client_descr);
     _send_out(md);
 
-    md->keepalive_handle = purple_timeout_add_seconds(md->keepalive, _mrim_ping, md);
-    if (!md->keepalive_handle) {
-        purple_connection_error_reason(
-            md->account->gc,
-            PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-            __("failed to start ping")
-        );
-    }
+    mrim_pkt_build_change_status(md, STATUS_ONLINE);
+    _send_out(md);
+
+    md->ping_handle = purple_timeout_add_seconds(md->ping_timeout, _mrim_ping, md);
+
+    md->pingback_handle = purple_timeout_add_seconds(PINGBACK_TIMEOUT, _mrim_pingback, md);
+    md->last_pinged = time(NULL);
+}
+
+static void
+_dispatch_ping(MrimData *md, MrimPktPing *pkt)
+{
+    purple_debug_info("mrim", "pinged back\n");
+    md->last_pinged = time(NULL);
 }
 
 static void
@@ -1720,8 +1760,11 @@ _message_delivery_reason(guint32 status)
         case MESSAGE_REJECTED_TOO_LARGE:
             return __("Message is too large");
             break;
-        case MESSAGE_REJECTED_DENY_OFFMSG:
+        case MESSAGE_REJECTED_RESTRICT_OFFMSG:
             return __("User disabled offline messages");
+            break;
+        case MESSAGE_REJECTED_PERMISSION:
+            return __("Have no permission to send offline message");
             break;
         default:
             return __("Unknown error");
@@ -1784,22 +1827,15 @@ _dispatch_message_status(MrimData *md, MrimPktMessageStatus *pkt)
 static void
 _dispatch_connection_param(MrimData *md, MrimPktConnectionParams *pkt)
 {
-    md->keepalive = pkt->timeout;
+    md->ping_timeout = pkt->timeout;
 
-    purple_debug_info("mrim", "keepalive period %u\n", (guint) pkt->timeout);
+    purple_debug_info("mrim", "ping_timeout period %u\n", (guint) pkt->timeout);
 
-    if (md->keepalive_handle) {
-        purple_timeout_remove(md->keepalive_handle);
+    if (md->ping_handle) {
+        purple_timeout_remove(md->ping_handle);
     }
 
-    md->keepalive_handle = purple_timeout_add_seconds(md->keepalive, _mrim_ping, md);
-    if (!md->keepalive_handle) {
-        purple_connection_error_reason(
-            md->account->gc,
-            PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-            __("failed to start ping")
-        );
-    }
+    md->ping_handle = purple_timeout_add_seconds(md->ping_timeout, _mrim_ping, md);
 }
 
 static void
@@ -2346,6 +2382,9 @@ _dispatch(MrimData *md, MrimPktHeader *pkt)
     switch (pkt->msg) {
         case MRIM_CS_HELLO_ACK:
             _dispatch_hello_ack(md, (MrimPktHelloAck*) pkt);
+            break;
+        case MRIM_CS_PING:
+            _dispatch_ping(md, (MrimPktPing*) pkt);
             break;
         case MRIM_CS_LOGIN_ACK:
             _dispatch_login_ack(md, (MrimPktLoginAck*) pkt);

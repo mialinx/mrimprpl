@@ -19,10 +19,10 @@ AM_GNU_GETTEXT([external])
 AM_GNU_GETTEXT_VERSION([0.18])
 
 # Check for modules
-PKG_CHECK_MODULES(GLIB, [glib-2.0 >= 2.4.0], , [
+PKG_CHECK_MODULES(GLIB, [glib-2.0 >= 2.3.0], , [
     AC_MSG_RESULT(no)
     AC_MSG_ERROR([
-    You must have GLib 2.4.0 or newer development headers installed to build.
+    You must have GLib 2.3.0 or newer development headers installed to build.
     If you have these installed already you may need to install pkg-config so
     I can find them.
 ])])

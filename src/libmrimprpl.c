@@ -5,14 +5,6 @@
 #include "mrim.h"
 #include "nls.h"
 
-#define MRIMPRPL_ID          PACKAGE_NAME
-#define MRIMPRPL_NAME        "Mail.Ru Agent"
-#define MRIMPRPL_VERSION     PACKAGE_VERSION
-#define MRIMPRPL_AUTHOR      PACKAGE_BUGREPORT
-#define MRIMPRPL_WEBSITE     "https://github.com/mialinx/mrimprpl"
-#define MRIMPRPL_SUMMARY     "Mail.Ru agent protocol support plugin"
-#define MRIMPRPL_DESCRIPTION MRIMPRPL_SUMMARY
-
 static PurplePluginProtocolInfo protocol_info = {
     0,                      /* Protocol options: no options for now */
     NULL,                   /* GList of PurpleAccountUserSplit (email, password). Filled in init */

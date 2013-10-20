@@ -18,11 +18,20 @@ mrim_pkt_free(MrimPktHeader *pkt);
 
 /* Client to Server messages */
 void
-mrim_pkt_build_hello(MrimData *md);
+mrim_pkt_build_hello(MrimData *md, const guint32 ping_timeout, 
+                    const guint32 pingback_timeout);
 
 void
-mrim_pkt_build_login(MrimData *md, const gchar *login, const gchar *pass,
-                    guint32 status, const gchar *agent);
+mrim_pkt_build_login2(MrimData *md, const gchar *login, const gchar *pass,
+                    guint32 status, const gchar *status_title, const gchar *status_descr,
+                    guint32 features, const gchar *agent, const gchar *lang,
+                    const gchar *ua_session, const gchar *replaced_ua_session, 
+                    const gchar *client_descr);
+
+void
+mrim_pkt_build_login3(MrimData *md, const gchar *login, const gchar *pass,
+                    guint32 features, const gchar *agent, const gchar* lang,
+                    const gchar *client_descr); // some fields are omitted
 
 void
 mrim_pkt_build_ping(MrimData *md);
@@ -79,6 +88,10 @@ typedef struct {
     MrimPktHeader header;
     gchar *reason;
 } MrimPktLoginRej;
+
+typedef struct {
+    MrimPktHeader header;
+} MrimPktPing;
 
 typedef struct {
     MrimPktHeader header;

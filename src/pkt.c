@@ -33,19 +33,27 @@ _str2lps(const gchar *str, const gchar *charset)
         return (MrimPktLps*) g_malloc0(sizeof(guint32));
     }
 
-    g_get_charset(&local_charset);
-    data = g_convert_with_fallback(str, strlen(str), charset, local_charset, "?", 
-                            NULL, &data_gsize, &err);
-    if (!data) {
-        purple_debug_error("mrim", "_str2lps: bad encoding '%s'. return empty lps\n", err->message);
-        return (MrimPktLps*) g_malloc0(sizeof(guint32));
+    if (charset) {
+        g_get_charset(&local_charset);
+        data = g_convert_with_fallback(str, strlen(str), charset, local_charset, "?", 
+                                NULL, &data_gsize, &err);
+        if (!data) {
+            purple_debug_error("mrim", "_str2lps: bad encoding '%s'. return empty lps\n", err->message);
+            return (MrimPktLps*) g_malloc0(sizeof(guint32));
+        }
+        data_len = (guint32) data_gsize;
     }
-    data_len = (guint32) data_gsize;
+    else {
+        data = (gchar*) str;
+        data_len = strlen(str);
+    }
 
     lps = (MrimPktLps*) g_malloc0(sizeof(guint32) + data_len);
     lps->length = GUINT32_TO_LE(data_len);
     memcpy(lps->data, data, data_len);
-    g_free(data);
+    if (charset) {
+        g_free(data);
+    }
     return lps;
 }
 
@@ -59,6 +67,12 @@ static MrimPktLps*
 _str2lps_utf16(const gchar *str)
 {
     return _str2lps(str, "UTF-16LE");
+}
+
+static MrimPktLps*
+_str2lps_bin(const gchar *str)
+{
+    return _str2lps(str, NULL);
 }
 
 static MrimPktLps*
@@ -100,14 +114,18 @@ _lps2str(MrimPktLps *lps, const gchar* charset)
     G_CONST_RETURN char *local_charset = NULL;
     GError *err = NULL;
 
-    g_get_charset(&local_charset);
-
-    str = g_convert_with_fallback(lps->data, GUINT32_FROM_LE(lps->length), 
-            local_charset, charset, "?", NULL, &str_gsize, &err);
-
-    if (!str) {
-        purple_debug_error("mrim", "_lps2str: bad encoding %s\n", err->message);
-        return NULL;
+    if (charset) {
+        g_get_charset(&local_charset);
+        str = g_convert_with_fallback(lps->data, GUINT32_FROM_LE(lps->length), 
+                local_charset, charset, "?", NULL, &str_gsize, &err);
+        if (!str) {
+            purple_debug_error("mrim", "_lps2str: bad encoding %s\n", err->message);
+            return NULL;
+        }
+    }
+    else {
+        str = g_malloc0(GUINT32_FROM_LE(lps->length) + sizeof('\0'));
+        memcpy(str, lps->data, GUINT32_FROM_LE(lps->length)); 
     }
 
     return str;
@@ -129,20 +147,33 @@ _init_header(MrimPktHeader *header, guint32 seq, guint32 msg, guint32 dlen)
 }
 
 void
-mrim_pkt_build_hello(MrimData *md) 
+mrim_pkt_build_hello(MrimData *md, guint32 ping_timeout, guint32 pingback_timeout) 
 {
     MrimPktHeader header;
-    _init_header(&header, ++md->tx_seq, MRIM_CS_HELLO, 0);
+    _init_header(&header, ++md->tx_seq, MRIM_CS_HELLO, sizeof(ping_timeout) + sizeof(pingback_timeout));
+    ping_timeout = GUINT32_TO_LE(ping_timeout);
+    pingback_timeout = GUINT32_TO_LE(pingback_timeout);
+
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
+    purple_circ_buffer_append(md->server.tx_buf, &ping_timeout, sizeof(ping_timeout));
+    purple_circ_buffer_append(md->server.tx_buf, &pingback_timeout, sizeof(pingback_timeout));
 }
 
 void
-mrim_pkt_build_login(MrimData *md, const gchar *login, const gchar *pass,
-                    guint32 status, const gchar *agent)
+mrim_pkt_build_login2(MrimData *md, const gchar *login, const gchar *pass,
+                    guint32 status, const gchar *status_title, const gchar *status_descr,
+                    guint32 features, const gchar *agent, const gchar *lang,
+                    const gchar *ua_session, const gchar *replaced_ua_session, 
+                    const gchar *client_descr)
 {
-    MrimPktLps *lps_login = NULL, *lps_pass = NULL, *lps_agent = NULL;
+    MrimPktLps *lps_login = NULL, *lps_pass = NULL, 
+               *lps_status_title = NULL, *lps_status_descr = NULL, 
+               *lps_agent = NULL, *lps_lang = NULL,
+               *lps_ua_session = NULL, *lps_replaced_ua_session = NULL,
+               *lps_client_descr = NULL;
+
     MrimPktHeader header;
-    guint32 dlen = 0;
+    guint32 dlen = 0, skip = GUINT32_TO_LE(0);
 
     if (!(lps_login = _str2lps_cp1251(login))) {
         return;
@@ -152,24 +183,155 @@ mrim_pkt_build_login(MrimData *md, const gchar *login, const gchar *pass,
         return;
     }
     status = GUINT32_TO_LE(status);
-    if (!(lps_agent = _str2lps_cp1251(agent))) {
+    if (!(lps_status_title = _str2lps_utf16(status_title))) {
         g_free(lps_login);
         g_free(lps_pass);
         return;
     }
+    if (!(lps_status_descr = _str2lps_utf16(status_descr))) {
+        g_free(lps_login);
+        g_free(lps_pass);
+        g_free(lps_status_title);
+        return;
+    }
+    features = GUINT32_TO_LE(features);
+    if (!(lps_agent = _str2lps_cp1251(agent))) {
+        g_free(lps_login);
+        g_free(lps_pass);
+        g_free(lps_status_title);
+        g_free(lps_status_descr);
+        return;
+    }
+    if (!(lps_lang = _str2lps_cp1251(lang))) {
+        g_free(lps_login);
+        g_free(lps_pass);
+        g_free(lps_status_title);
+        g_free(lps_status_descr);
+        g_free(lps_agent);
+        return;
+    }
+    if (!(lps_ua_session = _str2lps_cp1251(ua_session))) {
+        g_free(lps_login);
+        g_free(lps_pass);
+        g_free(lps_status_title);
+        g_free(lps_status_descr);
+        g_free(lps_agent);
+        g_free(lps_lang);
+        return;
+    }
+    if (!(lps_replaced_ua_session = _str2lps_cp1251(replaced_ua_session))) {
+        g_free(lps_login);
+        g_free(lps_pass);
+        g_free(lps_status_title);
+        g_free(lps_status_descr);
+        g_free(lps_agent);
+        g_free(lps_lang);
+        g_free(lps_ua_session);
+        return;
+    }
+    if (!(lps_client_descr = _str2lps_cp1251(client_descr))) {
+        g_free(lps_login);
+        g_free(lps_pass);
+        g_free(lps_status_title);
+        g_free(lps_status_descr);
+        g_free(lps_agent);
+        g_free(lps_lang);
+        g_free(lps_ua_session);
+        g_free(lps_replaced_ua_session);
+        return;
+    }
 
-    dlen = LPS_LEN(lps_login) + LPS_LEN(lps_pass) +
-            sizeof(dlen) + LPS_LEN(lps_agent);
+    dlen = LPS_LEN(lps_login) + LPS_LEN(lps_pass) 
+         + sizeof(status) + sizeof(skip) + LPS_LEN(lps_status_title) + LPS_LEN(lps_status_descr)
+         + sizeof(features) + LPS_LEN(lps_agent) + LPS_LEN(lps_lang)
+         + LPS_LEN(lps_ua_session) + LPS_LEN(lps_replaced_ua_session)
+         + LPS_LEN(lps_client_descr);
 
     _init_header(&header, ++md->tx_seq, MRIM_CS_LOGIN2, dlen);
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
     purple_circ_buffer_append(md->server.tx_buf, lps_login, LPS_LEN(lps_login));
     purple_circ_buffer_append(md->server.tx_buf, lps_pass, LPS_LEN(lps_pass));
     purple_circ_buffer_append(md->server.tx_buf, &status, sizeof(status));
+    purple_circ_buffer_append(md->server.tx_buf, &skip, sizeof(skip));
+    purple_circ_buffer_append(md->server.tx_buf, lps_status_title, LPS_LEN(lps_status_title));
+    purple_circ_buffer_append(md->server.tx_buf, lps_status_descr, LPS_LEN(lps_status_descr));
+    purple_circ_buffer_append(md->server.tx_buf, &features, sizeof(features));
     purple_circ_buffer_append(md->server.tx_buf, lps_agent, LPS_LEN(lps_agent));
+    purple_circ_buffer_append(md->server.tx_buf, lps_lang, LPS_LEN(lps_lang));
+    purple_circ_buffer_append(md->server.tx_buf, lps_ua_session, LPS_LEN(lps_ua_session));
+    purple_circ_buffer_append(md->server.tx_buf, lps_replaced_ua_session, LPS_LEN(lps_replaced_ua_session));
+    purple_circ_buffer_append(md->server.tx_buf, lps_client_descr, LPS_LEN(lps_client_descr));
+
+    g_free(lps_login);
+    g_free(lps_pass);
+    g_free(lps_status_title);
+    g_free(lps_status_descr);
+    g_free(lps_agent);
+    g_free(lps_lang);
+    g_free(lps_ua_session);
+    g_free(lps_replaced_ua_session);
+    g_free(lps_client_descr);
+
+    return;
+}
+
+void
+mrim_pkt_build_login3(MrimData *md, const gchar *login, const gchar *pass,
+                    guint32 features, const gchar *agent, const gchar* lang,
+                    const gchar *client_descr)
+{
+    MrimPktLps *lps_login = NULL, *lps_pass = NULL, *lps_agent = NULL, 
+               *lps_lang = NULL, *lps_client_descr = NULL;
+    MrimPktHeader header;
+    guint32 dlen = 0, skip = GUINT32_TO_LE(0);
+
+    if (!(lps_login = _str2lps_cp1251(login))) {
+        return;
+    }
+    if (!(lps_pass = _str2lps_cp1251(pass))) {
+        g_free(lps_login);
+        return;
+    }
+    features = GUINT32_TO_LE(features);
+    if (!(lps_agent = _str2lps_cp1251(agent))) {
+        g_free(lps_login);
+        g_free(lps_pass);
+        return;
+    }
+    if (!(lps_lang = _str2lps_cp1251(lang))) {
+        g_free(lps_login);
+        g_free(lps_pass);
+        g_free(lps_agent);
+        return;
+    }
+    if (!(lps_client_descr = _str2lps_cp1251(client_descr))) {
+        g_free(lps_login);
+        g_free(lps_pass);
+        g_free(lps_agent);
+        g_free(lps_lang);
+        return;
+    }
+
+    dlen = LPS_LEN(lps_login) + LPS_LEN(lps_pass) + sizeof(features) 
+         + LPS_LEN(lps_agent) + LPS_LEN(lps_lang) + sizeof(skip) 
+         + LPS_LEN(lps_client_descr) + sizeof(skip);
+
+    _init_header(&header, ++md->tx_seq, MRIM_CS_LOGIN3, dlen);
+    purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
+    purple_circ_buffer_append(md->server.tx_buf, lps_login, LPS_LEN(lps_login));
+    purple_circ_buffer_append(md->server.tx_buf, lps_pass, LPS_LEN(lps_pass));
+    purple_circ_buffer_append(md->server.tx_buf, &features, sizeof(features));
+    purple_circ_buffer_append(md->server.tx_buf, lps_agent, LPS_LEN(lps_agent));
+    purple_circ_buffer_append(md->server.tx_buf, lps_lang, LPS_LEN(lps_lang));
+    purple_circ_buffer_append(md->server.tx_buf, &skip, sizeof(skip)); // skip ua_data_names
+    purple_circ_buffer_append(md->server.tx_buf, lps_client_descr, LPS_LEN(lps_client_descr));
+    purple_circ_buffer_append(md->server.tx_buf, &skip, sizeof(skip)); // skip statistics
+
     g_free(lps_login);
     g_free(lps_pass);
     g_free(lps_agent);
+    g_free(lps_lang);
+    g_free(lps_client_descr);
 
     return;
 }
@@ -279,10 +441,6 @@ mrim_pkt_build_add_chat(MrimData *md, guint32 flags, const gchar *nick,
         + LPS_LEN(lps_nick) + 3 * LPS_LEN(lps_unused) 
         + LPS_LEN(lps_chat_cont));
 
-    // I know this is ugly, but this f**king server doesn't want to create chats
-    // It starts chat support from 0x14 minor version
-    header.proto = PROTO_MAKE_VERSION(PROTO_VERSION_MAJOR, 0x14);
-    
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
     purple_circ_buffer_append(md->server.tx_buf, &flags, sizeof(flags));
     purple_circ_buffer_append(md->server.tx_buf, &group_id, sizeof(group_id));
@@ -350,11 +508,11 @@ mrim_pkt_build_message(MrimData *md, guint32 flags, const gchar *to,
     if (!(lps_to = _str2lps_cp1251(to))) {
         return;
     }
-    if (!(lps_message = _str2lps_cp1251(message))) {
+    if (!(lps_message = _str2lps_utf16(message))) {
         g_free(lps_to);
         return;
     }
-    if (!(lps_rtf_message = _str2lps_cp1251(rtf_message))) {
+    if (!(lps_rtf_message = _str2lps_bin(rtf_message))) {
         g_free(lps_to);
         g_free(lps_message);
         return;
@@ -385,8 +543,14 @@ mrim_pkt_build_chat_get_members(MrimData *md, guint32 flags, const gchar* email)
         return;
     }
     
-    if (!(lps_message = lps_rtf_message = _str2lps_cp1251(""))) {
+    if (!(lps_message = _str2lps_utf16(""))) {
         g_free(lps_to);
+        return;
+    }
+
+    if (!(lps_rtf_message = _str2lps_bin(""))) {
+        g_free(lps_to);
+        g_free(lps_message);
         return;
     }
 
@@ -394,15 +558,12 @@ mrim_pkt_build_chat_get_members(MrimData *md, guint32 flags, const gchar* email)
     if (!(lps_chat = _vmem2lps(1, &subtype, sizeof(subtype)))) {
         g_free(lps_to);
         g_free(lps_message);
+        g_free(lps_rtf_message);
         return;
     }
 
     _init_header(&header, ++md->tx_seq, MRIM_CS_MESSAGE, sizeof(flags) + LPS_LEN(lps_to)
         + LPS_LEN(lps_message) + LPS_LEN(lps_rtf_message) + LPS_LEN(lps_chat));
-
-    // I know this is ugly, but this f**king server doesn't want to create chats
-    // It starts chat support from 0x14 minor version
-    header.proto = PROTO_MAKE_VERSION(PROTO_VERSION_MAJOR, 0x14);
 
     purple_circ_buffer_append(md->server.tx_buf, &header, sizeof(header));
     purple_circ_buffer_append(md->server.tx_buf, &flags, sizeof(flags));
@@ -413,6 +574,7 @@ mrim_pkt_build_chat_get_members(MrimData *md, guint32 flags, const gchar* email)
 
     g_free(lps_to);
     g_free(lps_message);
+    g_free(lps_rtf_message);
     g_free(lps_chat);
 }
 
@@ -429,12 +591,12 @@ mrim_pkt_build_chat_invite(MrimData *md, guint32 flags, const gchar* email,
         return;
     }
     
-    if (!(lps_message = _str2lps_cp1251(message))) {
+    if (!(lps_message = _str2lps_utf16(message))) {
         g_free(lps_to);
         return;
     }
 
-    if (!(lps_rtf_message = _str2lps_cp1251(""))) {
+    if (!(lps_rtf_message = _str2lps_bin(""))) {
         g_free(lps_to);
         g_free(lps_message);
         return;
@@ -699,6 +861,14 @@ _read_lps_utf16(gpointer ptr, guint32 *pos)
     return _lps2str(lps, "UTF-16LE");
 }
 
+static gchar*
+_read_lps_bin(gpointer ptr, guint32 *pos)
+{
+    MrimPktLps *lps = (MrimPktLps*) (ptr + *pos);
+    *pos += LPS_LEN(lps);
+    return _lps2str(lps, NULL);
+}
+
 static void
 _skip_lps(gpointer ptr, guint32 *pos)
 {
@@ -931,6 +1101,21 @@ _free_hello_ack(MrimPktHelloAck *loc)
     g_free(loc);
 }
 
+static MrimPktPing*
+_parse_ping(MrimPktHeader *pkt)
+{
+    guint32 pos = 0;
+    MrimPktPing *loc = g_new0(MrimPktPing, 1);
+    _read_header(pkt, &loc->header, &pos);
+    return loc;
+}
+
+static void
+_free_ping(MrimPktPing *loc)
+{
+    g_free(loc);
+}
+
 static MrimPktLoginAck*
 _parse_login_ack(MrimPktHeader *pkt)
 {
@@ -972,10 +1157,10 @@ _parse_message_ack(MrimPktHeader *pkt)
     loc->msg_id = _read_ul(pkt, &pos);
     loc->flags = _read_ul(pkt, &pos);
     loc->from = _read_lps_cp1251(pkt, &pos);
-    loc->message = _read_lps_cp1251(pkt, &pos);
+    loc->message = _read_lps_utf16(pkt, &pos);
     if (pos < loc->header.dlen + sizeof(loc->header)) {
         // bug with chat messages: no rtf lps
-        loc->rtf_message = _read_lps_cp1251(pkt, &pos);
+        loc->rtf_message = _read_lps_bin(pkt, &pos);
     }
     if ((pos < loc->header.dlen + sizeof(loc->header)) 
         && loc->flags & MESSAGE_FLAG_MULTICHAT) 
@@ -1175,7 +1360,7 @@ _parse_user_info(MrimPktHeader *pkt)
     _read_header(pkt, &loc->header, &pos);
     while (pos < loc->header.dlen + sizeof(loc->header)) {
         key = _read_lps_cp1251(pkt, &pos);
-        val = _read_lps_cp1251(pkt, &pos);
+        val = _read_lps_utf16(pkt, &pos);
         g_hash_table_insert(((MrimPktUserInfo *)loc)->info, key, val);
     }
     return loc;
@@ -1256,7 +1441,7 @@ _parse_contact_list(MrimPktHeader *pkt)
 
     for (id = 0; id < groups_count; id++) {
          flags = _read_ul(pkt, &pos);
-         nick = _read_lps_cp1251(pkt, &pos);
+         nick = _read_lps_utf16(pkt, &pos);
          group = mrim_group_new(id, flags, nick);
          g_free(nick);
          loc->groups = g_list_append(loc->groups, group);
@@ -1270,7 +1455,7 @@ _parse_contact_list(MrimPktHeader *pkt)
         flags = _read_ul(pkt, &pos);
         group_id = _read_ul(pkt, &pos);
         email = _read_lps_cp1251(pkt, &pos);
-        nick = _read_lps_cp1251(pkt, &pos);
+        nick = _read_lps_utf16(pkt, &pos);
         server_flags = _read_ul(pkt, &pos);
         status = _read_ul(pkt, &pos);
         contact = mrim_contact_new(MAX_GROUP + id, flags, server_flags, status,
@@ -1371,6 +1556,9 @@ mrim_pkt_parse(MrimData *md)
         case MRIM_CS_HELLO_ACK:
             loc = (MrimPktHeader*) _parse_hello_ack(pkt);
             break;
+        case MRIM_CS_PING:
+            loc = (MrimPktHeader*) _parse_ping(pkt);
+            break;
         case MRIM_CS_LOGIN_ACK:
             loc = (MrimPktHeader*) _parse_login_ack(pkt);
             break;
@@ -1433,6 +1621,9 @@ mrim_pkt_free(MrimPktHeader *loc)
         switch (loc->msg) {
             case MRIM_CS_HELLO_ACK:
                 _free_hello_ack((MrimPktHelloAck*) loc);
+                break;
+            case MRIM_CS_PING:
+                _free_ping((MrimPktPing*) loc);
                 break;
             case MRIM_CS_LOGIN_ACK:
                 _free_login_ack((MrimPktLoginAck*) loc);

@@ -5,6 +5,15 @@
 #include <glib.h>
 #include <purple.h>
 #include "proto.h"
+#include <time.h>
+
+#define MRIMPRPL_ID          PACKAGE_NAME
+#define MRIMPRPL_NAME        "Mail.Ru Agent"
+#define MRIMPRPL_VERSION     PACKAGE_VERSION
+#define MRIMPRPL_AUTHOR      PACKAGE_BUGREPORT
+#define MRIMPRPL_WEBSITE     "https://github.com/mialinx/mrimprpl"
+#define MRIMPRPL_SUMMARY     "Mail.Ru agent protocol support plugin"
+#define MRIMPRPL_DESCRIPTION MRIMPRPL_SUMMARY
 
 #define MRIMPRPL_BALANCER_DEFAULT_PORT 2042
 #define MRIMPRPL_BALANCER_DEFAULT_HOST "mrim.mail.ru"
@@ -56,8 +65,10 @@ typedef struct {
         PurpleCircBuffer *tx_buf;
     } server;
 
-    guint32 keepalive; 
-    guint32 keepalive_handle;
+    guint32 ping_timeout; 
+    guint32 ping_handle;
+    guint32 pingback_handle;
+    time_t last_pinged;
     guint32 tx_seq;
 
     GHashTable *groups;
